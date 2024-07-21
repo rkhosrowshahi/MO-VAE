@@ -23,54 +23,70 @@ class UnFlatten(nn.Module):
 
 # Define the VAE model
 class VAE3(nn.Module):
-    def __init__(self, latent_dim=2, in_height=32, in_channels=3):
+    def __init__(self, latent_dim=2, in_size=32, in_channels=3, hidden_dims=[32, 64, 128, 256, 512]):
         super(VAE3, self).__init__()
-        # Encoder
-        self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1),  # 32x32x3 -> 16x16x32
-            # nn.BatchNorm2d(32),
-            nn.ReLU(),
-            # PrintLayer(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),  # 16x16x32 -> 8x8x64
-            # nn.BatchNorm2d(64),
-            nn.ReLU(),
-            # PrintLayer(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),  # 8x8x64 -> 4x4x128
-            # nn.BatchNorm2d(128),
-            nn.ReLU(),
-            # PrintLayer(),
-            nn.Flatten(),  # 26x26x128 -> 128x26x26
-            # PrintLayer(),
-            # nn.Linear(128 * int((in_height/8)) * int(floor(in_height/8)), 16)
-        )
-        # Latent space
-        self.mu = nn.Linear(128 * int((in_height/8)) * int(floor(in_height/8)), latent_dim)  # mean of the latent space
-        self.log_var = nn.Linear(128 * int((in_height/8)) * int(floor(in_height/8)), latent_dim)  # log variance of the latent space
+        self.latent_dim = latent_dim
+        self.in_channels = in_channels
+        self.in_size = in_size
+        self.final_dim = hidden_dims[-1]
+        modules = []
+
+         # Build Encoder
+        for h_dim in hidden_dims:
+            modules.append(
+                nn.Sequential(
+                    nn.Conv2d(in_channels, out_channels=h_dim,
+                              kernel_size=3, stride=2, padding=1),
+                    nn.BatchNorm2d(h_dim),
+                    nn.LeakyReLU())
+            )
+            in_channels = h_dim
+        self.encoder = nn.Sequential(*modules)
+        out = self.encoder(torch.rand(1, 3, in_size, in_size))
+        self.size = out.shape[2]
+        # Latent Space
+        self.mu = nn.Linear(hidden_dims[-1] * self.size * self.size, latent_dim)
+        self.log_var = nn.Linear(hidden_dims[-1] * self.size * self.size, latent_dim)
         # Decoder
-        self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 128 * int(floor(in_height/8)) * int(floor(in_height/8))),  # 128 -> 128x4x4
-            # UnFlatten(),  # 128x4x4 -> 4x4x128
-            nn.Unflatten(1, (128, int(floor(in_height/8)), int(floor(in_height/8)))),
-            # PrintLayer(),
-            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # 4x4x128 -> 8x8x64
-            # nn.BatchNorm2d(64),
-            nn.ReLU(),
-            # PrintLayer(),
-            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # 8x8x64 ->   16x16x32
-            # nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, in_channels, kernel_size=3, stride=2, padding=1, output_padding=1),  # 16x16x32 -> 32x32x3
-            # PrintLayer(),
-            # nn.BatchNorm2d(in_channels),
-            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            # PrintLayer(),
-            # nn.Tanh()
-            nn.Sigmoid()
-        )
+        # Build Decoder
+        modules = []
+        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * in_size * in_size)
+        hidden_dims.reverse()
+
+        for i in range(len(hidden_dims) - 1):
+            modules.append(
+                nn.Sequential(
+                    nn.ConvTranspose2d(hidden_dims[i],
+                                       hidden_dims[i + 1],
+                                       kernel_size=3,
+                                       stride=2,
+                                       padding=1,
+                                       output_padding=1),
+                    nn.BatchNorm2d(hidden_dims[i + 1]),
+                    nn.LeakyReLU())
+            )
+        
+        self.final_layer = nn.Sequential(
+            nn.ConvTranspose2d(hidden_dims[-1],
+                               hidden_dims[-1],
+                               kernel_size=3,
+                               stride=2,
+                               padding=1,
+                               output_padding=1),
+            nn.BatchNorm2d(hidden_dims[-1]),
+            nn.LeakyReLU(),
+            nn.Conv2d(hidden_dims[-1], out_channels=3,
+                      kernel_size=3, padding=1),
+            nn.Sigmoid())
+            
+        modules.append(self.final_layer)
+        self.decoder = nn.Sequential(*modules)
 
     def encode(self, x):
         # Encode the input image
         h = self.encoder(x)
+        h = torch.flatten(h, start_dim=1)
+        print(h.size())
         mu, log_var = self.mu(h), self.log_var(h)
         return mu, log_var
 
@@ -83,7 +99,9 @@ class VAE3(nn.Module):
 
     def decode(self, z):
         # Decode the latent code
-        x_reconstructed = self.decoder(z)
+        out = self.decoder_input(z)
+        out = out.view(-1, self.final_dim, self.size, self.size)
+        x_reconstructed = self.decoder(out)
         return x_reconstructed
 
     def forward(self, x):

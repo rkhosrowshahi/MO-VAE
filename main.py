@@ -51,8 +51,9 @@ def bkl_loss(data, logits):
     return loss
 
 
-def eval_step(model, train_dataset, batch_size, optimizer, balancer, device):
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+def eval_step(model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None):
+    if train_loader is None:
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     criteria = {"reconstruction": mse_recons_loss_sum, "kl": bkl_loss}
     # Train the VAE model
     model.train()
@@ -88,8 +89,9 @@ def eval_step(model, train_dataset, batch_size, optimizer, balancer, device):
     return avg_total_loss, avg_task_losses, avg_task_weights, avg_comp_metrics
 
 
-def train_step(model, train_dataset, batch_size, optimizer, balancer, device):
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+def train_step(model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None):
+    if train_loader is None:
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     criteria = {"reconstruction": mse_recons_loss_sum, "kl": bkl_loss}
     # Train the VAE model
     model.train()
@@ -192,7 +194,7 @@ def plot_after_training(model, test_dataset, train_metrics, save_path, device):
 def main(args):
     # Define the device (GPU or CPU)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
     print(device)
 
     in_channels = 0
@@ -210,7 +212,20 @@ def main(args):
         in_channels = 3
         in_height = 32
         # Initialize the VAE model
-        model = VAE3(latent_dim=128, in_height=in_height, in_channels=in_channels).to(device)
+        model = VAE3(latent_dim=128, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256]).to(device)
+    elif args.dataset.lower() == 'celeba':
+        # Load the CelebA dataset
+        transform = transforms.Compose([transforms.RandomHorizontalFlip(),
+                                              transforms.CenterCrop(148),
+                                              transforms.Resize(64),
+                                              transforms.ToTensor()
+                                              ])
+        train_dataset = datasets.CelebA(root='./data', split='train', download=False, transform=transform)
+        test_dataset = datasets.CelebA(root='./data', split='test', download=False, transform=transform)
+        in_channels = 3
+        in_height = 64
+        # Initialize the VAE model
+        model = VAE3(latent_dim=128, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256, 512]).to(device)	
     elif args.dataset.lower() == 'fashion':
         transform = transforms.Compose([transforms.ToTensor(),
                                         # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
@@ -242,11 +257,12 @@ def main(args):
     print(args.compute_stats)
     if args.compute_stats:
         print("Computing statistics...")
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         train_metrics = []
         for epoch in tqdm(range(args.epochs)):
             avg_train_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = eval_step(model, train_dataset,
                                                                                             batch_size, optimizer,
-                                                                                            balancer, device)
+                                                                                            balancer, device, train_loader=train_loader)
             train_metrics.append({'train_loss': avg_train_loss, 'task_losses': avg_task_losses, 'stats': avg_comp_metrics})
         save_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
         # os.makedirs(save_path, exist_ok=True)
@@ -260,11 +276,13 @@ def main(args):
         np.savez(os.path.join(save_path, 'data/train_metrics.npz'), total_loss=total_loss_values,
                  recons_loss=recons_loss_values, kl_loss=kl_loss_values, stats=statistics)
     else:
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+	
         train_metrics = []
         for epoch in range(args.epochs):
             avg_train_loss, avg_task_losses, avg_task_weights = train_step(model, train_dataset, batch_size,
                                                                                optimizer,
-                                                                               balancer, device)
+                                                                               balancer, device, train_loader=train_loader)
             # Print the loss at each epoch
             print(f"Epoch: {epoch}, ", f"avg_train_loss: {avg_train_loss}, ", end=' ')
             for task_id in avg_task_losses:
@@ -293,7 +311,7 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer', type=str, default="multi")
     parser.add_argument('--scaler', type=str, default="min", choices=["linear", "min", "median", "rmse"])
     parser.add_argument('--lr', type=float, default="0.001")
-    parser.add_argument('--dataset', type=str, default="CIFAR10_tanh")
+    parser.add_argument('--dataset', type=str, default="CIFAR10")
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--seed', type=int, default=52)
     parser.add_argument('--compute_stats', action='store_true')

@@ -1,6 +1,7 @@
 import os
 from argparse import ArgumentParser
 from collections import defaultdict
+import pandas as pd
 
 import numpy as np
 import torch
@@ -11,6 +12,7 @@ from torch.nn import functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
+import torchvision.utils as vutils
 from tqdm import tqdm
 
 from models import VAE, VAE3
@@ -25,19 +27,19 @@ def set_seed(seed):
 
 def mse_recons_loss_sum(data, logits):
     reconstructed_data = logits[0]
-    loss = F.mse_loss(reconstructed_data, data, reduction='sum')
+    loss = F.mse_loss(reconstructed_data, data, reduction="sum")
     return loss
 
 
 def mse_recons_loss(data, logits):
     reconstructed_data = logits[0]
-    loss = F.mse_loss(reconstructed_data, data, reduction='mean')
+    loss = F.mse_loss(reconstructed_data, data, reduction="mean")
     return loss
 
 
 def bce_recons_loss(data, logits):
     reconstructed_data = logits[0]
-    loss = F.binary_cross_entropy_with_logits(reconstructed_data, data, reduction='sum')
+    loss = F.binary_cross_entropy_with_logits(reconstructed_data, data, reduction="sum")
     return loss
 
 
@@ -45,32 +47,38 @@ def bce_recons_loss(data, logits):
 def bkl_loss(data, logits):
     mu, log_var = logits[1], logits[2]
 
-    beta = 1.0
+    beta = args.beta
     # loss = beta * -0.5 * torch.mean(1 + log_var - mu ** 2 - log_var.exp())
-    loss = beta * torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim=1), dim=0)
+    loss = beta * torch.mean(
+        -0.5 * torch.sum(1 + log_var - mu**2 - log_var.exp(), dim=1), dim=0
+    )
     return loss
 
 
-def eval_step(model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None):
+def eval_step(
+    model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None
+):
     if train_loader is None:
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     criteria = {"reconstruction": mse_recons_loss_sum, "kl": bkl_loss}
     # Train the VAE model
     model.train()
-    avg_total_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = 0, defaultdict(float), defaultdict(
-        float), defaultdict(float)
+    avg_total_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = (
+        0,
+        defaultdict(float),
+        defaultdict(float),
+        defaultdict(float),
+    )
     for batch_idx, (data, _) in enumerate(train_loader):
 
-        balancer.step_with_model(
-            data=data.to(device),
-            model=model,
-            criteria=criteria
-        )
+        balancer.step_with_model(data=data.to(device), model=model, criteria=criteria)
         optimizer.step()
         losses = balancer.losses
         loss_weights = balancer.loss_weights
         info = balancer.info
-        avg_total_loss += sum(losses[task_id] * loss_weights[task_id] for task_id in losses)
+        avg_total_loss += sum(
+            losses[task_id] * loss_weights[task_id] for task_id in losses
+        )
         for task_id in losses:
             avg_task_losses[task_id] += losses[task_id]
             avg_task_weights[task_id] += loss_weights[task_id]
@@ -89,7 +97,9 @@ def eval_step(model, train_dataset, batch_size, optimizer, balancer, device, tra
     return avg_total_loss, avg_task_losses, avg_task_weights, avg_comp_metrics
 
 
-def train_step(model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None):
+def train_step(
+    model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None
+):
     if train_loader is None:
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     criteria = {"reconstruction": mse_recons_loss_sum, "kl": bkl_loss}
@@ -98,11 +108,7 @@ def train_step(model, train_dataset, batch_size, optimizer, balancer, device, tr
     loss_total, task_losses, task_weights = 0, defaultdict(float), defaultdict(float)
     for batch_idx, (data, _) in enumerate(train_loader):
 
-        balancer.step_with_model(
-            data=data.to(device),
-            model=model,
-            criteria=criteria
-        )
+        balancer.step_with_model(data=data.to(device), model=model, criteria=criteria)
         optimizer.step()
         losses = balancer.losses
         loss_weights = balancer.loss_weights
@@ -120,176 +126,293 @@ def train_step(model, train_dataset, batch_size, optimizer, balancer, device, tr
     return avg_total_loss, task_losses, task_weights
 
 
-def plot_after_training(model, test_dataset, train_metrics, save_path, device):
+def plot_after_training(model, data_loader, train_metrics, save_path, device, **kwargs):
     model.eval()
     n = 12
     w = 32
-    selected_samples = np.random.randint(0, len(test_dataset), n * n)
-    sample_subset = Subset(test_dataset, selected_samples)
-    sample_loader = DataLoader(sample_subset, batch_size=144, shuffle=False)
-    orig_img = np.zeros((n * w, n * w))
-    recon_img = np.zeros((n * w, n * w))
-    with torch.no_grad():
-        for batch_idx, (data, _) in enumerate((sample_loader)):
-            data = data.to(device)
-            reconstructed_data = model(data)[0]
+    # selected_samples = np.random.randint(0, len(test_dataset), n * n)
+    # sample_subset = Subset(test_dataset, selected_samples)
+    # sample_loader = DataLoader(sample_subset, batch_size=144, shuffle=False)
+    test_input, test_label = next(iter(data_loader))
+    test_input = test_input.to(device)
+    test_label = test_label.to(device)
 
-            orig_img = torchvision.utils.make_grid(data, nrow=n)
-            orig_img = np.transpose(orig_img.cpu().numpy(), (1, 2, 0))
+    vutils.save_image(test_input.data,
+                          os.path.join(save_path, "figures/original_images.png"),
+                          normalize=True,
+                          nrow=12)
 
-            recon_img = torchvision.utils.make_grid(reconstructed_data, nrow=n)
-            recon_img = np.transpose(recon_img.cpu().numpy(), (1, 2, 0))
+    reconstructed_data = model.generate(test_input)
+    vutils.save_image(reconstructed_data.data,
+                          os.path.join(save_path, "figures/generated_images.png"),
+                          normalize=True,
+                          nrow=12)
+    
+    try:
+        samples = model.sample(144, device, labels = test_label)
+        vutils.save_image(samples.cpu().data,
+                              os.path.join(save_path, "figures/sampled_images.png"),
+                              normalize=True,
+                              nrow=12)
+    except Warning:
+        pass
 
-    plt.imshow(orig_img)
-    plt.axis('off')
-    plt.title("Original Images")
-    plt.savefig(os.path.join(save_path, 'figures/original_images.png'))
-    plt.savefig(os.path.join(save_path, 'figures/original_images.pdf'))
-    plt.close()
+    # data = data.to(device)
+    # reconstructed_data = model(data)[0]
 
-    plt.imshow(recon_img)
-    plt.axis('off')
-    plt.title("Generated Images")
-    plt.savefig(os.path.join(save_path, 'figures/generated_images.png'))
-    plt.savefig(os.path.join(save_path, 'figures/generated_images.pdf'))
-    plt.close()
+    # orig_img = torchvision.utils.make_grid(data, nrow=n)
+    #         orig_img = np.transpose(orig_img.cpu().numpy(), (1, 2, 0))
+
+    #         recon_img = torchvision.utils.make_grid(reconstructed_data, nrow=n)
+    #         recon_img = np.transpose(recon_img.cpu().numpy(), (1, 2, 0))
+
+    # plt.imshow(orig_img)
+    # plt.axis("off")
+    # plt.title("Original Images")
+    # plt.savefig(os.path.join(save_path, "figures/original_images.png"))
+    # plt.savefig(os.path.join(save_path, "figures/original_images.pdf"))
+    # plt.close()
+
+    # plt.imshow(recon_img)
+    # plt.axis("off")
+    # plt.title("Generated Images")
+    # plt.savefig(os.path.join(save_path, "figures/generated_images.png"))
+    # plt.savefig(os.path.join(save_path, "figures/generated_images.pdf"))
+    # plt.close()
 
     epochs = np.arange(1, args.epochs + 1)
-    total_loss_values = [entry['train_loss'] for entry in train_metrics]
-    plt.plot(epochs, total_loss_values, marker='o')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Train total loss')
+    total_loss_values = [entry["train_loss"] for entry in train_metrics]
+    plt.plot(epochs, total_loss_values, marker="o")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Total loss")
     plt.grid(True)
-    plt.savefig(os.path.join(save_path, 'figures/total_loss_plot.png'))
-    plt.savefig(os.path.join(save_path, 'figures/total_loss_plot.pdf'))
+    plt.savefig(os.path.join(save_path, "figures/total_loss_plot.png"))
+    plt.savefig(os.path.join(save_path, "figures/total_loss_plot.pdf"))
     plt.close()
     # plt.show()
 
-    recons_loss_values = [entry['task_losses']['reconstruction'] for entry in train_metrics]
-    plt.plot(epochs, recons_loss_values, marker='s')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Train reconstruction loss')
+    recons_loss_values = [
+        entry["task_losses"]["reconstruction"] for entry in train_metrics
+    ]
+    plt.plot(epochs, recons_loss_values, marker="s")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Reconstruction loss")
     plt.grid(True)
-    plt.savefig(os.path.join(save_path, 'figures/reconstruction_loss_plot.png'))
-    plt.savefig(os.path.join(save_path, 'figures/reconstruction_loss_plot.pdf'))
+    plt.savefig(os.path.join(save_path, "figures/reconstruction_loss_plot.png"))
+    plt.savefig(os.path.join(save_path, "figures/reconstruction_loss_plot.pdf"))
     plt.close()
     # plt.show()
 
-    kl_loss_values = [entry['task_losses']['kl'] for entry in train_metrics]
-    plt.plot(epochs, kl_loss_values, marker='^')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Train Beta KL-divergence ($B=1$) loss')
+    kl_loss_values = [entry["task_losses"]["kl"] for entry in train_metrics]
+    plt.plot(epochs, kl_loss_values, marker="^")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title(f"Beta KL-divergence ($B={kwargs["beta"]}$) loss")
     plt.grid(True)
-    plt.savefig(os.path.join(save_path, 'figures/kl_loss_plot.png'))
-    plt.savefig(os.path.join(save_path, 'figures/kl_loss_plot.pdf'))
+    plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.png"))
+    plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.pdf"))
     plt.close()
 
-    np.savez(os.path.join(save_path, 'data/train_metrics.npz'), total_loss=total_loss_values,
-             recons_loss=recons_loss_values, kl_loss=kl_loss_values)
+    # np.savez(
+    #     os.path.join(save_path, "data/train_metrics.npz"),
+    #     total_loss=total_loss_values,
+    #     recons_loss=recons_loss_values,
+    #     kl_loss=kl_loss_values,
+    # )
+
+    df = pd.DataFrame(
+        {
+            "steps": epochs,
+            "total_loss": total_loss_values,
+            "rec_loss": recons_loss_values,
+            "kl_loss": kl_loss_values,
+        }
+    )
+    df.to_csv(os.path.join(save_path, "data/train_metrics.csv"), index=False)
 
 
 def main(args):
     # Define the device (GPU or CPU)
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.device_count() == 1:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
     print(device)
 
     in_channels = 0
     in_height = 0
     train_dataset, test_dataset = None, None
     model = None
-    if args.dataset.lower() == 'cifar10':
+    if args.dataset.lower() == "cifar10":
         # Load the CIFAR10 dataset
-        transform = transforms.Compose([transforms.ToTensor(),
-                                        # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
-                                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-                                        ])
-        train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-        test_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
+        train_dataset = datasets.CIFAR10(
+            root="./data", train=True, download=True, transform=transform
+        )
+        test_dataset = datasets.CIFAR10(
+            root="./data", train=False, download=True, transform=transform
+        )
         in_channels = 3
         in_height = 32
         # Initialize the VAE model
-        model = VAE3(latent_dim=args.latent_dim, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256]).to(device)
-    elif args.dataset.lower() == 'celeba':
+        model = VAE3(
+            latent_dim=args.latent_dim,
+            in_size=in_height,
+            in_channels=in_channels,
+            hidden_dims=[32, 64, 128, 256],
+        ).to(device)
+    elif args.dataset.lower() == "celeba":
         # Load the CelebA dataset
-        transform = transforms.Compose([transforms.RandomHorizontalFlip(),
-                                              transforms.CenterCrop(148),
-                                              transforms.Resize(64),
-                                              transforms.ToTensor()
-                                              ])
-        train_dataset = datasets.CelebA(root='./data', split='train', download=True, transform=transform)
-        test_dataset = datasets.CelebA(root='./data', split='test', download=True, transform=transform)
+        transform = transforms.Compose(
+            [
+                transforms.RandomHorizontalFlip(),
+                transforms.CenterCrop(148),
+                transforms.Resize(64),
+                transforms.ToTensor(),
+            ]
+        )
+        train_dataset = datasets.CelebA(
+            root="./data", split="train", download=True, transform=transform
+        )
+        test_dataset = datasets.CelebA(
+            root="./data", split="test", download=True, transform=transform
+        )
         in_channels = 3
         in_height = 64
         # Initialize the VAE model
-        model = VAE3(latent_dim=args.latent_dim, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256, 512]).to(device)	
-    elif args.dataset.lower() == 'fashion':
-        transform = transforms.Compose([transforms.ToTensor(),
-                                        # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
-                                        transforms.Normalize(0.5, 0.5)
-                                        ])
+        model = VAE3(
+            latent_dim=args.latent_dim,
+            in_size=in_height,
+            in_channels=in_channels,
+            hidden_dims=[32, 64, 128, 256, 512],
+        ).to(device)
+    elif args.dataset.lower() == "fashion":
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
+                transforms.Normalize(0.5, 0.5),
+            ]
+        )
         # Load the Fashion dataset
-        train_dataset = datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform)
-        test_dataset = datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform)
+        train_dataset = datasets.FashionMNIST(
+            root="./data", train=True, download=True, transform=transform
+        )
+        test_dataset = datasets.FashionMNIST(
+            root="./data", train=False, download=True, transform=transform
+        )
         in_channels = 1
         in_height = 28
         # Initialize the VAE model
-        model = VAE(latent_dim=args.latent_dim, in_height=in_height, in_channels=in_channels).to(device)
+        model = VAE(
+            latent_dim=args.latent_dim, in_height=in_height, in_channels=in_channels
+        ).to(device)
 
     # Create data loaders
     batch_size = args.batch_size
-    # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=144, shuffle=False)
 
     # Initialize the optimizer and scheduler
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
-    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=1e-5)
-    # scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=20, T_mult=1, eta_min=0)
+
     balancer = None
-    if args.optimizer == 'multi':
-        balancer = AlignedMTLBalancer(scale_mode=args.scaler, compute_stats=args.compute_stats)
-    elif args.optimizer == 'single':
+    if args.optimizer == "multi":
+        balancer = AlignedMTLBalancer(
+            scale_mode=args.scaler, compute_stats=args.compute_stats
+        )
+    elif args.optimizer == "single":
         balancer = LinearScalarization(compute_stats=args.compute_stats)
 
-    print(args.compute_stats)
     if args.compute_stats:
         print("Computing statistics...")
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
         train_metrics = []
         for epoch in tqdm(range(args.epochs)):
-            avg_train_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = eval_step(model, train_dataset,
-                                                                                            batch_size, optimizer,
-                                                                                            balancer, device, train_loader=train_loader)
-            train_metrics.append({'train_loss': avg_train_loss, 'task_losses': avg_task_losses, 'stats': avg_comp_metrics})
+            avg_train_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = (
+                eval_step(
+                    model,
+                    train_dataset,
+                    batch_size,
+                    optimizer,
+                    balancer,
+                    device,
+                    train_loader=train_loader,
+                )
+            )
+            train_metrics.append(
+                {
+                    "train_loss": avg_train_loss,
+                    "task_losses": avg_task_losses,
+                    "stats": avg_comp_metrics,
+                }
+            )
         save_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
         # os.makedirs(save_path, exist_ok=True)
-        os.makedirs(save_path + 'figures', exist_ok=True)
-        os.makedirs(save_path + 'data', exist_ok=True)
+        os.makedirs(save_path + "figures", exist_ok=True)
+        os.makedirs(save_path + "data", exist_ok=True)
 
-        total_loss_values = [entry['train_loss'] for entry in train_metrics]
-        recons_loss_values = [entry['task_losses']['reconstruction'] for entry in train_metrics]
-        kl_loss_values = [entry['task_losses']['kl'] for entry in train_metrics]
-        statistics = [entry['stats'] for entry in train_metrics]
-        np.savez(os.path.join(save_path, 'data/train_metrics.npz'), total_loss=total_loss_values,
-                 recons_loss=recons_loss_values, kl_loss=kl_loss_values, stats=statistics)
+        total_loss_values = [entry["train_loss"] for entry in train_metrics]
+        recons_loss_values = [
+            entry["task_losses"]["reconstruction"] for entry in train_metrics
+        ]
+        kl_loss_values = [entry["task_losses"]["kl"] for entry in train_metrics]
+        statistics = [entry["stats"] for entry in train_metrics]
+        np.savez(
+            os.path.join(save_path, "data/train_metrics_with_stats.npz"),
+            total_loss=total_loss_values,
+            recons_loss=recons_loss_values,
+            kl_loss=kl_loss_values,
+            stats=statistics,
+        )
+        df = pd.DataFrame(
+            {
+                "steps": range(1, args.epochs + 1),
+                "total_loss": total_loss_values,
+                "rec_loss": recons_loss_values,
+                "kl_loss": kl_loss_values,
+            }
+        )
+        df.to_csv(
+            os.path.join(save_path, "data/train_metrics_with_stats.csv"), index=False
+        )
     else:
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-	
+
         train_metrics = []
         for epoch in range(args.epochs):
-            avg_train_loss, avg_task_losses, avg_task_weights = train_step(model, train_dataset, batch_size,
-                                                                               optimizer,
-                                                                               balancer, device, train_loader=train_loader)
+            avg_train_loss, avg_task_losses, avg_task_weights = train_step(
+                model,
+                train_dataset,
+                batch_size,
+                optimizer,
+                balancer,
+                device,
+                train_loader=train_loader,
+            )
             # Print the loss at each epoch
-            print(f"Epoch: {epoch}, ", f"avg_train_loss: {avg_train_loss}, ", end=' ')
+            print(f"Epoch: {epoch}, ", f"avg_train_loss: {avg_train_loss}, ", end=" ")
             for task_id in avg_task_losses:
-                print('loss_{}: {:.6e}, weight_{}:{:.6f}'.format(task_id, avg_task_losses[task_id], task_id,
-                                                                 avg_task_weights[task_id]), end=', ')
+                print(
+                    "loss_{}: {:.6e}, weight_{}:{:.6f}".format(
+                        task_id,
+                        avg_task_losses[task_id],
+                        task_id,
+                        avg_task_weights[task_id],
+                    ),
+                    end=", ",
+                )
             print()
-            train_metrics.append({'train_loss': avg_train_loss, 'task_losses': avg_task_losses})
+            train_metrics.append(
+                {"train_loss": avg_train_loss, "task_losses": avg_task_losses}
+            )
 
             # print(f'curr_LR: {scheduler.get_last_lr()}')
             # Update the scheduler
@@ -297,25 +420,30 @@ def main(args):
 
         save_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
         # os.makedirs(save_path, exist_ok=True)
-        os.makedirs(save_path + 'figures', exist_ok=True)
-        os.makedirs(save_path + 'data', exist_ok=True)
+        os.makedirs(save_path + "figures", exist_ok=True)
+        os.makedirs(save_path + "data", exist_ok=True)
         # Save the checkpoint of model
-        torch.save(model.state_dict(), os.path.join(save_path, 'data/model_weights.pth'))
+        torch.save(
+            model.state_dict(), os.path.join(save_path, "data/model_weights.pth")
+        )
         # Evaluate model to generate images
-        plot_after_training(model, test_dataset, train_metrics, save_path, device)
+        plot_after_training(model, test_loader, train_metrics, save_path, device, args.beta)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--optimizer', type=str, default="multi")
-    parser.add_argument('--scaler', type=str, default="min", choices=["linear", "min", "median", "rmse"])
-    parser.add_argument('--lr', type=float, default="0.001")
-    parser.add_argument('--dataset', type=str, default="CIFAR10")
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--seed', type=int, default=52)
-    parser.add_argument('--compute_stats', action='store_true')
-    parser.add_argument('--latent_dim', type=int, default=128)
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--optimizer", type=str, default="multi")
+    parser.add_argument(
+        "--scaler", type=str, default="min", choices=["linear", "min", "median", "rmse"]
+    )
+    parser.add_argument("--lr", type=float, default="0.001")
+    parser.add_argument("--dataset", type=str, default="CIFAR10")
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--seed", type=int, default=52)
+    parser.add_argument("--compute_stats", action="store_true")
+    parser.add_argument("--latent_dim", type=int, default=128)
+    parser.add_argument("--beta", type=float, default=1)
     # parser.set_defaults(compute_stats=False)
 
     args = parser.parse_args()

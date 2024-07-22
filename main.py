@@ -51,7 +51,6 @@ def bkl_loss(data, logits):
     # loss = beta * -0.5 * torch.mean(1 + log_var - mu ** 2 - log_var.exp())
     kl = torch.mean(-0.5 * torch.sum(1 + log_var - mu**2 - log_var.exp(), dim=1), dim=0)
     loss = beta * kl
-    print(loss, kl)
     return loss
 
 

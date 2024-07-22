@@ -50,7 +50,7 @@ class VAE3(nn.Module):
         # Decoder
         # Build Decoder
         modules = []
-        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * in_size * in_size)
+        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * self.size * self.size)
         hidden_dims.reverse()
 
         for i in range(len(hidden_dims) - 1):
@@ -86,7 +86,6 @@ class VAE3(nn.Module):
         # Encode the input image
         h = self.encoder(x)
         h = torch.flatten(h, start_dim=1)
-        print(h.size())
         mu, log_var = self.mu(h), self.log_var(h)
         return mu, log_var
 

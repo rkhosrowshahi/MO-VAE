@@ -194,7 +194,7 @@ def plot_after_training(model, test_dataset, train_metrics, save_path, device):
 def main(args):
     # Define the device (GPU or CPU)
 
-    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
 
     in_channels = 0
@@ -212,7 +212,7 @@ def main(args):
         in_channels = 3
         in_height = 32
         # Initialize the VAE model
-        model = VAE3(latent_dim=128, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256]).to(device)
+        model = VAE3(latent_dim=args.latent_dim, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256]).to(device)
     elif args.dataset.lower() == 'celeba':
         # Load the CelebA dataset
         transform = transforms.Compose([transforms.RandomHorizontalFlip(),
@@ -220,12 +220,12 @@ def main(args):
                                               transforms.Resize(64),
                                               transforms.ToTensor()
                                               ])
-        train_dataset = datasets.CelebA(root='./data', split='train', download=False, transform=transform)
-        test_dataset = datasets.CelebA(root='./data', split='test', download=False, transform=transform)
+        train_dataset = datasets.CelebA(root='./data', split='train', download=True, transform=transform)
+        test_dataset = datasets.CelebA(root='./data', split='test', download=True, transform=transform)
         in_channels = 3
         in_height = 64
         # Initialize the VAE model
-        model = VAE3(latent_dim=128, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256, 512]).to(device)	
+        model = VAE3(latent_dim=args.latent_dim, in_size=in_height, in_channels=in_channels, hidden_dims=[32, 64, 128, 256, 512]).to(device)	
     elif args.dataset.lower() == 'fashion':
         transform = transforms.Compose([transforms.ToTensor(),
                                         # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
@@ -237,7 +237,7 @@ def main(args):
         in_channels = 1
         in_height = 28
         # Initialize the VAE model
-        model = VAE(latent_dim=128, in_height=in_height, in_channels=in_channels).to(device)
+        model = VAE(latent_dim=args.latent_dim, in_height=in_height, in_channels=in_channels).to(device)
 
     # Create data loaders
     batch_size = args.batch_size
@@ -315,6 +315,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--seed', type=int, default=52)
     parser.add_argument('--compute_stats', action='store_true')
+    parser.add_argument('--latent_dim', type=int, default=128)
     # parser.set_defaults(compute_stats=False)
 
     args = parser.parse_args()

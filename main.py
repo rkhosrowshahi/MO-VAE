@@ -126,34 +126,35 @@ def train_step(
     return avg_total_loss, task_losses, task_weights
 
 
-def plot_after_training(model, data_loader, train_metrics, save_path, device, **kwargs):
+def plot_after_training(model, data_loader, train_metrics, save_path, device, beta):
     model.eval()
-    n = 12
-    w = 32
-    # selected_samples = np.random.randint(0, len(test_dataset), n * n)
-    # sample_subset = Subset(test_dataset, selected_samples)
-    # sample_loader = DataLoader(sample_subset, batch_size=144, shuffle=False)
     test_input, test_label = next(iter(data_loader))
     test_input = test_input.to(device)
     test_label = test_label.to(device)
 
-    vutils.save_image(test_input.data,
-                          os.path.join(save_path, "figures/original_images.png"),
-                          normalize=True,
-                          nrow=12)
+    vutils.save_image(
+        test_input.data,
+        os.path.join(save_path, "figures/original_images.png"),
+        normalize=True,
+        nrow=12,
+    )
 
     reconstructed_data = model.generate(test_input)
-    vutils.save_image(reconstructed_data.data,
-                          os.path.join(save_path, "figures/generated_images.png"),
-                          normalize=True,
-                          nrow=12)
-    
+    vutils.save_image(
+        reconstructed_data.data,
+        os.path.join(save_path, "figures/generated_images.png"),
+        normalize=True,
+        nrow=12,
+    )
+
     try:
-        samples = model.sample(144, device, labels = test_label)
-        vutils.save_image(samples.cpu().data,
-                              os.path.join(save_path, "figures/sampled_images.png"),
-                              normalize=True,
-                              nrow=12)
+        samples = model.sample(144, device, labels=test_label)
+        vutils.save_image(
+            samples.cpu().data,
+            os.path.join(save_path, "figures/sampled_images.png"),
+            normalize=True,
+            nrow=12,
+        )
     except Warning:
         pass
 
@@ -209,7 +210,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, **
     plt.plot(epochs, kl_loss_values, marker="^")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.title(f"Beta KL-divergence ($B={kwargs["beta"]}$) loss")
+    plt.title(f"Beta KL-divergence ($B={beta}$) loss")
     plt.grid(True)
     plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.png"))
     plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.pdf"))
@@ -355,7 +356,7 @@ def main(args):
                     "stats": avg_comp_metrics,
                 }
             )
-        save_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
+        save_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler_beta/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
         # os.makedirs(save_path, exist_ok=True)
         os.makedirs(save_path + "figures", exist_ok=True)
         os.makedirs(save_path + "data", exist_ok=True)
@@ -427,7 +428,9 @@ def main(args):
             model.state_dict(), os.path.join(save_path, "data/model_weights.pth")
         )
         # Evaluate model to generate images
-        plot_after_training(model, test_loader, train_metrics, save_path, device, args.beta)
+        plot_after_training(
+            model, test_loader, train_metrics, save_path, device, args.beta
+        )
 
 
 if __name__ == "__main__":

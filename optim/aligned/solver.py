@@ -22,6 +22,7 @@ class ProcrustesSolver:
                 * torch.finfo().eps
             )
             rank = sum(singulars > tol)
+            print(singulars)
             print(tol, rank)
             if rank == 0:
                 rank = 1

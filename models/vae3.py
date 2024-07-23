@@ -103,8 +103,10 @@ class VAE3(nn.Module):
     def encode(self, x):
         # Encode the input image
         h = self.encoder(x)
+        print(h.shape)
         h = torch.flatten(h, start_dim=1)
         mu, log_var = self.mu(h), self.log_var(h)
+        print(mu.shape)
         return mu, log_var
 
     def reparameterize(self, mu, log_var):

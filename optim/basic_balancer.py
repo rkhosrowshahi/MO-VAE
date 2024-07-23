@@ -137,6 +137,7 @@ class BasicBalancer(torch.nn.Module):
                 )
             else:
                 for p in shared_params:
+                    print(p.shape)
                     if p.grad is not None:
                         p.grad.data.zero_()
 
@@ -287,14 +288,9 @@ class BasicBalancer(torch.nn.Module):
         self.step(
             losses=losses,
             shared_params=list(model.encoder.parameters()),
-            task_specific_params={
-                "reconstruction": model.decoder.parameters(),
-                "kl": model.mu.parameters(),
-                "kl": model.log_var.parameters(),
-            },
+            task_specific_params=None,
             shared_representation=hrepr,
             last_shared_layer_params=None,
-            model=model,
         )
 
     def step(

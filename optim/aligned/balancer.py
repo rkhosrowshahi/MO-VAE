@@ -13,10 +13,22 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         self.scale_mode = scale_mode
         print("AMGDA balancer scale mode:", self.scale_mode)
 
-    # def step_with_model(
-    #     self, data: torch.Tensor, model: torch.nn.Module, criteria: dict, **kwargs
-    # ) -> None:
-    #     losses, hrepr = self.compute_losses(data, model, criteria)
+    def step_with_model(
+        self, data: torch.Tensor, model: torch.nn.Module, criteria: dict, **kwargs
+    ) -> None:
+        losses, hrepr = self.compute_losses(data, model, criteria)
+        self.step(
+            losses=losses,
+            shared_params=list(model.encoder.parameters()),
+            task_specific_params={
+                "reconstruction": model.decoder.parameters(),
+                "kl": model.mu.parameters(),
+                "kl": model.log_var.parameters(),
+            },
+            shared_representation=hrepr,
+            last_shared_layer_params=None,
+            model=model,
+        )
 
     def step(
         self,

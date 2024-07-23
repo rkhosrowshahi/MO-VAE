@@ -112,7 +112,6 @@ class BasicBalancer(torch.nn.Module):
 
     @staticmethod
     def get_G_wrt_shared2(losses, shared_params, hrepr, update_decoder_grads=False):
-        # _hrepr = [h.data.detach().clone().requires_grad_(True) for h in hrepr]
 
         grads = []
         for task_id in losses:
@@ -143,7 +142,7 @@ class BasicBalancer(torch.nn.Module):
 
                 for p in hrepr:
                     if p.grad is not None:
-                        print("hrepr", p.shape)
+                        print("latent", p.shape)
                         p.grad.data.zero_()
 
                 cur_loss.backward(retain_graph=True)

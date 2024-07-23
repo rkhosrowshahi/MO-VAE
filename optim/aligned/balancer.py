@@ -25,7 +25,7 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
                 "kl": model.mu.parameters(),
                 "kl": model.log_var.parameters(),
             },
-            shared_representation=hrepr,
+            shared_representation=[model.mu.parameters(), model.log_var.parameters()],
             last_shared_layer_params=None,
             model=model,
         )

@@ -11,6 +11,7 @@ class ProcrustesSolver:
         with torch.no_grad():
             print(grads.shape)
             cov_grad_matrix_e = torch.matmul(grads.permute(0, 2, 1), grads)
+            print(cov_grad_matrix_e.shape)
             cov_grad_matrix_e = cov_grad_matrix_e.mean(0)
             print(cov_grad_matrix_e.shape)
 

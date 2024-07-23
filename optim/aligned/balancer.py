@@ -40,7 +40,9 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
             # self.apply_decoder_scaling(task_specific_params, weights)
 
         # self.set_losses({task_id: losses[task_id] * weights[i] for i, task_id in enumerate(losses)})
-        total_loss = sum(losses[task_id] * weights[task_id] for task_id in losses)
+        total_loss = sum(
+            losses[task_id] * weights[i] for i, task_id in enumerate(losses)
+        )
         total_loss.backward()
 
         self.set_loss_weights({task_id: weights[i] for i, task_id in enumerate(losses)})

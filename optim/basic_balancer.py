@@ -231,7 +231,7 @@ class BasicBalancer(torch.nn.Module):
         losses, hrepr = self.compute_losses(data, model, criteria)
         self.step(
             losses=losses,
-            shared_params=list(model.parameters()),
+            shared_params=list(model.encoder.parameters()),
             task_specific_params={
                 "reconstruction": model.decoder.parameters(),
                 "kl": model.mu.parameters(),

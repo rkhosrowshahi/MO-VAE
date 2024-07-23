@@ -215,7 +215,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     plt.plot(iterations, kl_loss_values[iterations - 1], marker="^")
     plt.xlabel("Iteration")
     plt.ylabel("Loss")
-    plt.title(f"Beta KL-divergence ($\beta={beta}$) loss")
+    plt.title("Beta KL-divergence" + r"$(\beta={beta})$" + "loss")
     plt.grid(True)
     plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.png"))
     plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.pdf"))

@@ -64,7 +64,7 @@ def eval_step(
 ):
     if train_loader is None:
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    criteria = {"reconstruction": mse_recons_loss_sum, "kl": bkl_loss}
+    criteria = {"kl": bkl_loss, "reconstruction": mse_recons_loss_sum}
     # Train the VAE model
     model.train()
     avg_total_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = (

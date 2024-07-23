@@ -111,6 +111,60 @@ class BasicBalancer(torch.nn.Module):
         return torch.stack(grads, dim=0)
 
     @staticmethod
+    def get_G_wrt_shared2(losses, shared_params, hrepr, update_decoder_grads=False):
+        _hrepr = [h.data.detach().clone().requires_grad_(True) for h in hrepr]
+
+        grads = []
+        for task_id in losses:
+            cur_loss = losses[task_id]
+            if not update_decoder_grads:
+                grad = torch.cat(
+                    [
+                        (
+                            p.flatten()
+                            if p is not None
+                            else torch.zeros_like(shared_params[i]).flatten()
+                        )
+                        for i, p in enumerate(
+                            torch.autograd.grad(
+                                cur_loss,
+                                shared_params,
+                                retain_graph=True,
+                                allow_unused=True,
+                            )
+                        )
+                    ]
+                )
+            else:
+                for p in shared_params:
+                    if p.grad is not None:
+                        p.grad.data.zero_()
+
+                for p in _hrepr:
+                    if p.grad is not None:
+                        p.grad.data.zero_()
+
+                cur_loss.backward(retain_graph=True)
+                grad = torch.cat(
+                    [
+                        (
+                            p.grad.flatten().clone()
+                            if p.grad is not None
+                            else torch.zeros_like(p).flatten()
+                        )
+                        for p in shared_params
+                    ]
+                )
+
+            grads.append(grad)
+
+        for p in shared_params:
+            if p.grad is not None:
+                p.grad.data.zero_()
+
+        return torch.stack(grads, dim=0)
+
+    @staticmethod
     def get_model_G_wrt_shared(
         hrepr,
         targets,
@@ -218,7 +272,7 @@ class BasicBalancer(torch.nn.Module):
         # reconstructed, mu, log_var = model(data)
 
         out = model(data)
-        hrepr = out[-1]
+        hrepr = [out[1], out[2]]
 
         losses = {}
         for task_id in criteria:

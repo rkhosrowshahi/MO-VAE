@@ -13,6 +13,11 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         self.scale_mode = scale_mode
         print("AMGDA balancer scale mode:", self.scale_mode)
 
+    # def step_with_model(
+    #     self, data: torch.Tensor, model: torch.nn.Module, criteria: dict, **kwargs
+    # ) -> None:
+    #     losses, hrepr = self.compute_losses(data, model, criteria)
+
     def step(
         self,
         losses,
@@ -22,7 +27,9 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         last_shared_layer_params=None,
         model=None,
     ):
-        grads = self.get_G_wrt_shared(losses, shared_params, update_decoder_grads=True)
+        grads = self.get_G_wrt_shared2(
+            losses, shared_params, shared_representation, update_decoder_grads=True
+        )
         grads, weights, singulars = ProcrustesSolver.apply(
             grads.T.unsqueeze(0), self.scale_mode
         )
@@ -31,7 +38,7 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         if self.compute_stats:
             self.compute_metrics(grads[0])
 
-        # self.set_shared_grad(shared_params, grad)
+        self.set_shared_grad(shared_params, grad)
 
         if self.scale_decoder_grad is True:
             self.scale_task_specific_params(
@@ -41,11 +48,11 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
             # self.apply_decoder_scaling(task_specific_params, weights)
 
         # self.set_losses({task_id: losses[task_id] * weights[i] for i, task_id in enumerate(losses)})
-        self.zero_grad_model(model)
-        total_loss = sum(
-            losses[task_id] * weights[i] for i, task_id in enumerate(losses)
-        )
-        total_loss.backward()
+        # self.zero_grad_model(model)
+        # total_loss = sum(
+        #     losses[task_id] * weights[i] for i, task_id in enumerate(losses)
+        # )
+        # total_loss.backward()
 
         self.set_loss_weights({task_id: weights[i] for i, task_id in enumerate(losses)})
         self.set_losses(losses)

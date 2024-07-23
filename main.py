@@ -302,7 +302,7 @@ def main(args):
             latent_dim=args.latent_dim,
             in_size=in_height,
             in_channels=in_channels,
-            hidden_dims=[32, 64, 128, 256, 512],
+            hidden_dims=[32, 64, 128, 256, 512, 1024],
         ).to(device)
     elif args.dataset.lower() == "fashion":
         transform = transforms.Compose(

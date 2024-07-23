@@ -7,7 +7,7 @@ from .. import balancers
 
 @balancers.register("amtl")
 class AlignedMTLBalancer(basic_balancer.BasicBalancer):
-    def __init__(self, scale_mode="min", scale_decoder_grad=False, **kwargs):
+    def __init__(self, scale_mode="min", scale_decoder_grad=True, **kwargs):
         super().__init__(**kwargs)
         self.scale_decoder_grad = scale_decoder_grad
         self.scale_mode = scale_mode

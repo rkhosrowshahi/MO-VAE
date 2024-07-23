@@ -68,17 +68,39 @@ class BasicBalancer(torch.nn.Module):
         for task_id in losses:
             cur_loss = losses[task_id]
             if not update_decoder_grads:
-                grad = torch.cat([p.flatten() if p is not None else torch.zeros_like(shared_params[i]).flatten()
-                                  for i, p in enumerate(torch.autograd.grad(cur_loss, shared_params,
-                                                                            retain_graph=True, allow_unused=True))])
+                grad = torch.cat(
+                    [
+                        (
+                            p.flatten()
+                            if p is not None
+                            else torch.zeros_like(shared_params[i]).flatten()
+                        )
+                        for i, p in enumerate(
+                            torch.autograd.grad(
+                                cur_loss,
+                                shared_params,
+                                retain_graph=True,
+                                allow_unused=True,
+                            )
+                        )
+                    ]
+                )
             else:
                 for p in shared_params:
                     if p.grad is not None:
                         p.grad.data.zero_()
 
                 cur_loss.backward(retain_graph=True)
-                grad = torch.cat([p.grad.flatten().clone() if p.grad is not None else torch.zeros_like(p).flatten()
-                                  for p in shared_params])
+                grad = torch.cat(
+                    [
+                        (
+                            p.grad.flatten().clone()
+                            if p.grad is not None
+                            else torch.zeros_like(p).flatten()
+                        )
+                        for p in shared_params
+                    ]
+                )
 
             grads.append(grad)
 
@@ -89,24 +111,48 @@ class BasicBalancer(torch.nn.Module):
         return torch.stack(grads, dim=0)
 
     @staticmethod
-    def get_model_G_wrt_shared(hrepr, targets, encoder, decoders, criteria, loss_fn=None,
-                               update_decoder_grads=False, return_losses=False):
+    def get_model_G_wrt_shared(
+        hrepr,
+        targets,
+        encoder,
+        decoders,
+        criteria,
+        loss_fn=None,
+        update_decoder_grads=False,
+        return_losses=False,
+    ):
         if loss_fn is None:
-            loss_fn = lambda task_task_id: criteria[task_task_id](decoders[task_task_id](hrepr), targets[task_task_id])
+            loss_fn = lambda task_task_id: criteria[task_task_id](
+                decoders[task_task_id](hrepr), targets[task_task_id]
+            )
 
         grads = []
         losses = {}
         for task_id in criteria:
             cur_loss = loss_fn(task_id)
             if not update_decoder_grads:
-                grad = torch.cat([p.flatten()
-                                  for p in torch.autograd.grad(cur_loss, encoder.parameters(),
-                                                               retain_graph=True, allow_unused=True)
-                                  if p is not None])
+                grad = torch.cat(
+                    [
+                        p.flatten()
+                        for p in torch.autograd.grad(
+                            cur_loss,
+                            encoder.parameters(),
+                            retain_graph=True,
+                            allow_unused=True,
+                        )
+                        if p is not None
+                    ]
+                )
             else:
                 encoder.zero_grad()
                 cur_loss.backward(retain_graph=True)
-                grad = torch.cat([p.grad.flatten().clone() for p in encoder.parameters() if p.grad is not None])
+                grad = torch.cat(
+                    [
+                        p.grad.flatten().clone()
+                        for p in encoder.parameters()
+                        if p.grad is not None
+                    ]
+                )
 
             grads.append(grad)
             losses[task_id] = cur_loss
@@ -118,23 +164,36 @@ class BasicBalancer(torch.nn.Module):
             return grads
 
     @staticmethod
-    def get_model_G_wrt_hrepr(hrepr, targets, model, criteria, loss_fn=None,
-                              update_decoder_grads=False, return_losses=False):
+    def get_model_G_wrt_hrepr(
+        hrepr,
+        targets,
+        model,
+        criteria,
+        loss_fn=None,
+        update_decoder_grads=False,
+        return_losses=False,
+    ):
 
         _hrepr = hrepr.data.detach().clone().requires_grad_(True)
         if loss_fn is None:
-            loss_fn = lambda task_task_id: criteria[task_task_id](model.decoders[task_task_id](_hrepr),
-                                                                  targets[task_task_id])
+            loss_fn = lambda task_task_id: criteria[task_task_id](
+                model.decoders[task_task_id](_hrepr), targets[task_task_id]
+            )
 
         grads = []
         losses = {}
         for task_id in criteria:
             cur_loss = loss_fn(task_id)
             if not update_decoder_grads:
-                grad = torch.cat([p.flatten()
-                                  for p in torch.autograd.grad(cur_loss, _hrepr,
-                                                               retain_graph=False, allow_unused=True)
-                                  if p is not None])
+                grad = torch.cat(
+                    [
+                        p.flatten()
+                        for p in torch.autograd.grad(
+                            cur_loss, _hrepr, retain_graph=False, allow_unused=True
+                        )
+                        if p is not None
+                    ]
+                )
             else:
                 if _hrepr.grad is not None:
                     _hrepr.grad.data.zero_()
@@ -151,7 +210,9 @@ class BasicBalancer(torch.nn.Module):
             return grads
 
     @staticmethod
-    def compute_losses(data: torch.Tensor, model: torch.nn.Module, criteria: dict, **kwargs):
+    def compute_losses(
+        data: torch.Tensor, model: torch.nn.Module, criteria: dict, **kwargs
+    ):
         BasicBalancer.zero_grad_model(model)
         # hrepr = model.encoder(data)
         # reconstructed, mu, log_var = model(data)
@@ -164,16 +225,27 @@ class BasicBalancer(torch.nn.Module):
             losses[task_id] = criteria[task_id](data, out)
         return losses, hrepr
 
-    def step_with_model(self, data: torch.Tensor, model: torch.nn.Module, criteria: dict,
-                        **kwargs) -> None:
+    def step_with_model(
+        self, data: torch.Tensor, model: torch.nn.Module, criteria: dict, **kwargs
+    ) -> None:
         losses, hrepr = self.compute_losses(data, model, criteria)
-        self.step(losses=losses,
-                  shared_params=list(model.parameters()),
-                  task_specific_params=list(model.decoder.parameters()),
-                  shared_representation=hrepr,
-                  last_shared_layer_params=None)
+        self.step(
+            losses=losses,
+            shared_params=list(model.encoder.parameters()),
+            task_specific_params={"reconstruction": model.decoder.parameters()},
+            shared_representation=hrepr,
+            last_shared_layer_params=None,
+        )
 
-    def step(self, losses, shared_params, task_specific_params, shared_representation=None,
-             last_shared_layer_params=None) -> None:
-        raise NotImplementedError("Balancer requires model to be specified. "
-                                  "Use 'step_with_model' method for this balancer")
+    def step(
+        self,
+        losses,
+        shared_params,
+        task_specific_params,
+        shared_representation=None,
+        last_shared_layer_params=None,
+    ) -> None:
+        raise NotImplementedError(
+            "Balancer requires model to be specified. "
+            "Use 'step_with_model' method for this balancer"
+        )

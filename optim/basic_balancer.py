@@ -137,12 +137,12 @@ class BasicBalancer(torch.nn.Module):
                 )
             else:
                 for p in shared_params:
-                    print(p.shape)
+                    print("shared", p.shape)
                     if p.grad is not None:
                         p.grad.data.zero_()
 
                 for p in _hrepr:
-                    print(p.shape)
+                    print("hrepr", p.shape)
                     if p.grad is not None:
                         p.grad.data.zero_()
 

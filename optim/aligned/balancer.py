@@ -7,20 +7,24 @@ from .. import balancers
 
 @balancers.register("amtl")
 class AlignedMTLBalancer(basic_balancer.BasicBalancer):
-    def __init__(self, scale_mode='min', scale_decoder_grad=False, **kwargs):
+    def __init__(self, scale_mode="min", scale_decoder_grad=True, **kwargs):
         super().__init__(**kwargs)
         self.scale_decoder_grad = scale_decoder_grad
         self.scale_mode = scale_mode
-        print('AMGDA balancer scale mode:', self.scale_mode)
+        print("AMGDA balancer scale mode:", self.scale_mode)
 
-    def step(self, losses,
-             shared_params,
-             task_specific_params,
-             shared_representation=None,
-             last_shared_layer_params=None
-             ):
+    def step(
+        self,
+        losses,
+        shared_params,
+        task_specific_params,
+        shared_representation=None,
+        last_shared_layer_params=None,
+    ):
         grads = self.get_G_wrt_shared(losses, shared_params, update_decoder_grads=True)
-        grads, weights, singulars = ProcrustesSolver.apply(grads.T.unsqueeze(0), self.scale_mode)
+        grads, weights, singulars = ProcrustesSolver.apply(
+            grads.T.unsqueeze(0), self.scale_mode
+        )
         grad, weights = grads[0].sum(-1), weights.sum(-1)
 
         if self.compute_stats:
@@ -38,7 +42,7 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
 
 @balancers.register("amtlub")
 class AlignedMTLUBBalancer(basic_balancer.BasicBalancer):
-    def __init__(self, scale_decoder_grad=False, scale_mode='min', **kwargs):
+    def __init__(self, scale_decoder_grad=False, scale_mode="min", **kwargs):
         super().__init__(**kwargs)
         self.scale_decoder_grad = scale_decoder_grad
         self.scale_mode = scale_mode
@@ -47,9 +51,17 @@ class AlignedMTLUBBalancer(basic_balancer.BasicBalancer):
         self.zero_grad_model(model)
         hrepr = model.encoder(data)
 
-        grads, losses = self.get_model_G_wrt_hrepr(hrepr, targets, model, criteria,
-                                                   update_decoder_grads=True, return_losses=True)
-        grads, weights, singulars = ProcrustesSolver.apply(grads.T.unsqueeze(0), self.scale_mode)
+        grads, losses = self.get_model_G_wrt_hrepr(
+            hrepr,
+            targets,
+            model,
+            criteria,
+            update_decoder_grads=True,
+            return_losses=True,
+        )
+        grads, weights, singulars = ProcrustesSolver.apply(
+            grads.T.unsqueeze(0), self.scale_mode
+        )
         grad, weights = grads[0].sum(-1), weights.sum(-1)
 
         if self.compute_stats:

@@ -141,6 +141,7 @@ class BasicBalancer(torch.nn.Module):
                         p.grad.data.zero_()
 
                 for p in _hrepr:
+                    print(p.shape)
                     if p.grad is not None:
                         p.grad.data.zero_()
 

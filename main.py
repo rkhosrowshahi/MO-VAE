@@ -232,7 +232,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
 
     df = pd.DataFrame(
         {
-            "steps": iterations,
+            "steps": np.arange(1, len(total_loss_values) + 1, dtype=int),
             "total_loss": total_loss_values,
             "rec_loss": recons_loss_values,
             "rec_weight": rec_loss_w,

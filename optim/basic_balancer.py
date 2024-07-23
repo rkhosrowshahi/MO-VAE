@@ -111,7 +111,12 @@ class BasicBalancer(torch.nn.Module):
         return torch.stack(grads, dim=0)
 
     @staticmethod
-    def get_G_wrt_shared2(losses, shared_params, hrepr, update_decoder_grads=False):
+    def get_G_wrt_shared2(
+        losses,
+        shared_params,
+        #   encoder, mu, log_var,
+        update_decoder_grads=False,
+    ):
 
         grads = []
         for task_id in losses:
@@ -135,45 +140,51 @@ class BasicBalancer(torch.nn.Module):
                     ]
                 )
             else:
-                for layer in shared_params:
-                    for name, p in layer:
-                        if p.grad is not None:
-                            print("shared", name, p.shape)
-                            p.grad.data.zero_()
-                        else:
-                            print("shared no grad", name)
-
+                for p in shared_params:
+                    if p.grad is not None:
+                        p.grad.data.zero_()
+                # mu.zero_grad()
+                # log_var.zero_grad()
+                # encoder.zero_grad()
                 cur_loss.backward(retain_graph=True)
-                grad = []
-                for layer in shared_params:
-                    for name, p in layer:
-                        if p.grad is not None:
-                            grad.append(p.grad.flatten().clone())
-
-                        else:
-                            grad.append(torch.zeros_like(p).flatten())
-                print(grads)
-                grad = torch.cat(grad)
-                # grad = torch.cat(
+                grad = torch.cat(
+                    [
+                        (
+                            p.grad.flatten().clone()
+                            if p.grad is not None
+                            else torch.zeros_like(p).flatten()
+                        )
+                        for p in shared_params
+                    ]
+                )
+                # grad1 = torch.cat(
                 #     [
-                #         (
-                #             p.grad.flatten().clone()
-                #             if p.grad is not None
-                #             else torch.zeros_like(p).flatten()
-                #         )
-                #         for p in shared_params
-                #         for layer in shared_params
+                #         p.grad.flatten().clone()
+                #         for p in encoder.parameters()
+                #         if p.grad is not None
                 #     ]
                 # )
+                # grad2 = torch.cat(
+                #     [
+                #         p.grad.flatten().clone()
+                #         for p in log_var.parameters()
+                #         if p.grad is not None
+                #     ]
+                # )
+                # grad3 = torch.cat(
+                #     [
+                #         p.grad.flatten().clone()
+                #         for p in mu.parameters()
+                #         if p.grad is not None
+                #     ]
+                # )
+                # grad = torch.cat([grad1, grad2, grad3])
 
-            grads.append()
+            grads.append(grad)
 
-        for layer in shared_params:
-            for name, p in layer:
-                if p.grad is not None:
-                    p.grad.data.zero_()
+        grads = torch.stack(grads, dim=0)
 
-        return torch.stack(grads, dim=0)
+        return grads
 
     @staticmethod
     def get_model_G_wrt_shared(
@@ -296,7 +307,9 @@ class BasicBalancer(torch.nn.Module):
         losses, hrepr = self.compute_losses(data, model, criteria)
         self.step(
             losses=losses,
-            shared_params=list(model.encoder.parameters()),
+            shared_params=list(model.encoder.parameters())
+            + list(model.mu.parameters())
+            + list(model.log_var.parameters()),
             task_specific_params=None,
             shared_representation=hrepr,
             last_shared_layer_params=None,

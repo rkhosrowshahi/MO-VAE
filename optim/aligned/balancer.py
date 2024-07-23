@@ -19,13 +19,9 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         losses, hrepr = self.compute_losses(data, model, criteria)
         self.step(
             losses=losses,
-            shared_params=list(
-                (
-                    model.encoder.named_parameters(),
-                    # model.mu.named_parameters(),
-                    # model.log_var.named_parameters(),
-                )
-            ),
+            shared_params=list(model.encoder.parameters())
+            + list(model.mu.parameters())
+            + list(model.log_var.parameters()),
             task_specific_params={
                 "reconstruction": model.decoder.parameters(),
                 "kl": model.mu.parameters(),
@@ -46,7 +42,10 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         model=None,
     ):
         grads = self.get_G_wrt_shared2(
-            losses, shared_params, shared_representation, update_decoder_grads=True
+            losses,
+            shared_params,
+            #   model.encoder, model.mu, model.log_var,
+            update_decoder_grads=True,
         )
         grads, weights, singulars = ProcrustesSolver.apply(
             grads.T.unsqueeze(0), self.scale_mode
@@ -56,6 +55,9 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         if self.compute_stats:
             self.compute_metrics(grads[0])
 
+        # self.set_shared_grad(model.encoder.parameters(), grad)
+        # self.set_shared_grad(model.mu.parameters(), grad)
+        # self.set_shared_grad(model.log_var.parameters(), grad)
         self.set_shared_grad(shared_params, grad)
 
         if self.scale_decoder_grad is True:

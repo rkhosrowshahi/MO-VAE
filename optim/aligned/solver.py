@@ -19,7 +19,7 @@ class ProcrustesSolver:
             print(
                 torch.max(singulars),
                 max(cov_grad_matrix_e.shape[-2:]),
-                torch.finfo().eps,
+                # torch.finfo().eps,
             )
             tol = (
                 torch.max(singulars)

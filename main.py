@@ -97,10 +97,8 @@ def eval_step(
 
 
 def train_step(
-    model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None
+    model, optimizer, balancer, device, train_metrics=None, train_loader=None
 ):
-    if train_loader is None:
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     criteria = {"reconstruction": mse_recons_loss_sum, "kl": bkl_loss}
     # Train the VAE model
     model.train()
@@ -118,6 +116,14 @@ def train_step(
         for task_id in losses:
             task_losses[task_id] += losses[task_id]
             task_weights[task_id] += loss_weights[task_id]
+
+        train_metrics.append(
+            {
+                "train_loss": loss_total,
+                "task_losses": losses,
+                "task_weights": loss_weights,
+            }
+        )
     avg_total_loss = loss_total / len(train_loader)
     for task_id in task_losses:
         task_losses[task_id] /= len(train_loader)
@@ -180,9 +186,9 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     # plt.savefig(os.path.join(save_path, "figures/generated_images.pdf"))
     # plt.close()
 
-    epochs = np.arange(1, args.epochs + 1)
     total_loss_values = [entry["train_loss"] for entry in train_metrics]
-    plt.plot(epochs, total_loss_values, marker="o")
+    iterations = np.arange(1, len(total_loss_values) + 1)
+    plt.plot(iterations, total_loss_values, marker="o")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Total loss")
@@ -195,7 +201,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     recons_loss_values = [
         entry["task_losses"]["reconstruction"] for entry in train_metrics
     ]
-    plt.plot(epochs, recons_loss_values, marker="s")
+    plt.plot(iterations, recons_loss_values, marker="s")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Reconstruction loss")
@@ -206,7 +212,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     # plt.show()
 
     kl_loss_values = [entry["task_losses"]["kl"] for entry in train_metrics]
-    plt.plot(epochs, kl_loss_values, marker="^")
+    plt.plot(iterations, kl_loss_values, marker="^")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title(f"Beta KL-divergence ($B={beta}$) loss")
@@ -221,13 +227,17 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     #     recons_loss=recons_loss_values,
     #     kl_loss=kl_loss_values,
     # )
+    rec_loss_w = [entry["task_weights"]["reconstruction"] for entry in train_metrics]
+    kl_loss_w = [entry["task_weights"]["kl"] for entry in train_metrics]
 
     df = pd.DataFrame(
         {
-            "steps": epochs,
+            "steps": iterations,
             "total_loss": total_loss_values,
             "rec_loss": recons_loss_values,
+            "rec_weight": rec_loss_w,
             "kl_loss": kl_loss_values,
+            "kl_weight": kl_loss_w,
         }
     )
     df.to_csv(os.path.join(save_path, "data/train_metrics.csv"), index=False)
@@ -390,11 +400,10 @@ def main(args):
         for epoch in range(args.epochs):
             avg_train_loss, avg_task_losses, avg_task_weights = train_step(
                 model,
-                train_dataset,
-                batch_size,
                 optimizer,
                 balancer,
                 device,
+                train_metrics,
                 train_loader=train_loader,
             )
             # Print the loss at each epoch
@@ -410,9 +419,6 @@ def main(args):
                     end=", ",
                 )
             print()
-            train_metrics.append(
-                {"train_loss": avg_train_loss, "task_losses": avg_task_losses}
-            )
 
             # print(f'curr_LR: {scheduler.get_last_lr()}')
             # Update the scheduler

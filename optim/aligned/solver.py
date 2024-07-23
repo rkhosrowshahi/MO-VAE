@@ -9,16 +9,18 @@ class ProcrustesSolver:
         ), f"Invalid shape of 'grads': {grads.shape}. Only 3D tensors are applicable"
 
         with torch.no_grad():
-            print(grads.shape)
             cov_grad_matrix_e = torch.matmul(grads.permute(0, 2, 1), grads)
-            print(cov_grad_matrix_e.shape)
             cov_grad_matrix_e = cov_grad_matrix_e.mean(0)
-            print(cov_grad_matrix_e.shape)
 
             # singulars, basis = torch.symeig(cov_grad_matrix_e, eigenvectors=True) ***DEPRECATED***
-            singulars, basis = torch.linalg.eigh(
+            singulars, basis = torch.linalg.eig(
                 cov_grad_matrix_e
             )  # singular is eigenvalue landa and basis is eigenvector V
+            print(
+                torch.max(singulars),
+                max(cov_grad_matrix_e.shape[-2:]),
+                torch.finfo().eps,
+            )
             tol = (
                 torch.max(singulars)
                 * max(cov_grad_matrix_e.shape[-2:])

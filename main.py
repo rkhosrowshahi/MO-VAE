@@ -326,6 +326,7 @@ def main(args):
             latent_dim=args.latent_dim, in_height=in_height, in_channels=in_channels
         ).to(device)
 
+    print(f"Train size: {len(train_dataset)}, Test size: {len(test_dataset)}")
     # Create data loaders
     batch_size = args.batch_size
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -341,6 +342,18 @@ def main(args):
         )
     elif args.optimizer == "single":
         balancer = LinearScalarization(compute_stats=args.compute_stats)
+
+    res_path = os.path.join(
+        args.output_path,
+        args.dataset.lower(),
+        args.optimizer.lower(),
+        args.scaler.lower(),
+        str(args.batch_size),
+        str(args.latent_dim),
+        str(args.seed + args.run),
+    )
+    os.makedirs(res_path + "/figures", exist_ok=True)
+    os.makedirs(res_path + "/data", exist_ok=True)
 
     if args.compute_stats:
         print("Computing statistics...")
@@ -424,17 +437,13 @@ def main(args):
             # Update the scheduler
             # scheduler.step()
 
-        save_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
+        # res_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
         # os.makedirs(save_path, exist_ok=True)
-        os.makedirs(save_path + "figures", exist_ok=True)
-        os.makedirs(save_path + "data", exist_ok=True)
         # Save the checkpoint of model
-        torch.save(
-            model.state_dict(), os.path.join(save_path, "data/model_weights.pth")
-        )
+        torch.save(model.state_dict(), os.path.join(res_path, "data/model_weights.pth"))
         # Evaluate model to generate images
         plot_after_training(
-            model, test_loader, train_metrics, save_path, device, args.beta
+            model, test_loader, train_metrics, res_path, device, args.beta
         )
 
 
@@ -448,13 +457,17 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default="0.001")
     parser.add_argument("--dataset", type=str, default="CIFAR10")
     parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--seed", type=int, default=52)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--compute_stats", action="store_true")
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--beta", type=float, default=1)
     parser.add_argument("--gpu", type=int, default=0, help="gpu id")
+    parser.add_argument(
+        "--output-path", type=str, default="./logs/", help="path to store the results"
+    )
+    parser.add_argument("--run", type=int, default=1, help="[1..10]")
     # parser.set_defaults(compute_stats=False)
 
     args = parser.parse_args()
-    set_seed(args.seed)
+    set_seed(args.seed + args.run)
     main(args)

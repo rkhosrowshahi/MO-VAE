@@ -22,7 +22,7 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         last_shared_layer_params=None,
     ):
         grads = self.get_G_wrt_shared(losses, shared_params, update_decoder_grads=True)
-        print(grads)
+        print(grads.shape)
         grads, weights, singulars = ProcrustesSolver.apply(
             grads.T.unsqueeze(0), self.scale_mode
         )

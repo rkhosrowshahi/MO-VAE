@@ -215,7 +215,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     plt.plot(iterations, kl_loss_values, marker="^")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.title(f"Beta KL-divergence ($B={beta}$) loss")
+    plt.title(f"Beta KL-divergence ($\beta={beta}$) loss")
     plt.grid(True)
     plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.png"))
     plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.pdf"))
@@ -261,7 +261,7 @@ def main(args):
             [
                 transforms.ToTensor(),
                 # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ]
         )
         train_dataset = datasets.CIFAR10(
@@ -285,7 +285,7 @@ def main(args):
             [
                 transforms.RandomHorizontalFlip(),
                 transforms.CenterCrop(148),
-                transforms.Resize(64),
+                transforms.Resize(128),
                 transforms.ToTensor(),
             ]
         )
@@ -296,7 +296,7 @@ def main(args):
             root="./data", split="test", download=True, transform=transform
         )
         in_channels = 3
-        in_height = 64
+        in_height = 128
         # Initialize the VAE model
         model = VAE3(
             latent_dim=args.latent_dim,
@@ -452,6 +452,7 @@ if __name__ == "__main__":
     parser.add_argument("--compute_stats", action="store_true")
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--beta", type=float, default=1)
+    parser.add_argument("--gpu", type=int, default=0, help="gpu id")
     # parser.set_defaults(compute_stats=False)
 
     args = parser.parse_args()

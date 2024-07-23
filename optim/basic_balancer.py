@@ -140,7 +140,14 @@ class BasicBalancer(torch.nn.Module):
                         print("shared", p.shape)
                         p.grad.data.zero_()
 
-                for p in hrepr:
+                for p in hrepr[0]:
+                    print(p)
+                    if p.grad is not None:
+                        print("latent", p.shape)
+                        p.grad.data.zero_()
+
+                for p in hrepr[1]:
+                    print(p)
                     if p.grad is not None:
                         print("latent", p.shape)
                         p.grad.data.zero_()

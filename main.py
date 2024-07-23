@@ -187,7 +187,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     # plt.close()
 
     total_loss_values = [entry["train_loss"] for entry in train_metrics]
-    iterations = np.arange(1, len(total_loss_values) + 1, 100)
+    iterations = np.arange(1, len(total_loss_values) + 1, 100, dtype=int)
     plt.plot(iterations, total_loss_values[iterations - 1], marker="o")
     plt.xlabel("Iteration")
     plt.ylabel("Loss")

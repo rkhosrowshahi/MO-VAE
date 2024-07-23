@@ -164,7 +164,7 @@ class BasicBalancer(torch.nn.Module):
                 #     ]
                 # )
 
-            grads.append(grad)
+            grads.append(torch.cat(grad))
 
         for layer in shared_params:
             for name, p in layer:

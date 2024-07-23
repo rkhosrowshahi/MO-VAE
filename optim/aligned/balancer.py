@@ -19,7 +19,13 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         losses, hrepr = self.compute_losses(data, model, criteria)
         self.step(
             losses=losses,
-            shared_params=list(model.encoder.parameters()),
+            shared_params=list(
+                (
+                    model.encoder.named_parameters(),
+                    model.mu.named_parameters(),
+                    model.log_var.named_parameters(),
+                )
+            ),
             task_specific_params={
                 "reconstruction": model.decoder.parameters(),
                 "kl": model.mu.parameters(),
@@ -39,7 +45,6 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         last_shared_layer_params=None,
         model=None,
     ):
-        print(type(shared_params))
         grads = self.get_G_wrt_shared2(
             losses, shared_params, shared_representation, update_decoder_grads=True
         )

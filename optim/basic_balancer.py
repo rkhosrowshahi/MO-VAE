@@ -135,12 +135,13 @@ class BasicBalancer(torch.nn.Module):
                     ]
                 )
             else:
-                for p in shared_params:
-                    if p.grad is not None:
-                        print("shared", p.shape)
-                        p.grad.data.zero_()
-                    else:
-                        print("shared no grad")
+                for layer in shared_params:
+                    for name, p in layer:
+                        if p.grad is not None:
+                            print("shared", name, p.shape)
+                            p.grad.data.zero_()
+                        else:
+                            print("shared no grad", name)
 
                 cur_loss.backward(retain_graph=True)
                 grad = torch.cat(
@@ -154,15 +155,15 @@ class BasicBalancer(torch.nn.Module):
                     ]
                 )
 
-            for p in hrepr[0]:
-                if p.grad is not None:
-                    print("latent", p.shape)
-                    p.grad.data.zero_()
+            # for p in hrepr[0]:
+            #     if p.grad is not None:
+            #         print("latent", p.shape)
+            #         p.grad.data.zero_()
 
-            for p in hrepr[1]:
-                if p.grad is not None:
-                    print("latent", p.shape)
-                    p.grad.data.zero_()
+            # for p in hrepr[1]:
+            #     if p.grad is not None:
+            #         print("latent", p.shape)
+            #         p.grad.data.zero_()
 
             grads.append(grad)
 

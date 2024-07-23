@@ -15,13 +15,16 @@ class ProcrustesSolver:
             # singulars, basis = torch.symeig(cov_grad_matrix_e, eigenvectors=True) ***DEPRECATED***
             singulars, basis = torch.linalg.eigh(
                 cov_grad_matrix_e
-            )  # singular is landa and basis is V
+            )  # singular is eigenvalue landa and basis is eigenvector V
             tol = (
                 torch.max(singulars)
                 * max(cov_grad_matrix_e.shape[-2:])
                 * torch.finfo().eps
             )
             rank = sum(singulars > tol)
+            print(tol, rank)
+            if rank == 0:
+                rank = 1
 
             order = torch.argsort(singulars, dim=-1, descending=True)
             singulars, basis = singulars[order][:rank], basis[:, order][:, :rank]

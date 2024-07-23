@@ -290,7 +290,7 @@ def main(args):
             [
                 transforms.RandomHorizontalFlip(),
                 transforms.CenterCrop(148),
-                transforms.Resize(128),
+                transforms.Resize(64),
                 transforms.ToTensor(),
             ]
         )
@@ -301,13 +301,13 @@ def main(args):
             root="./data", split="test", download=True, transform=transform
         )
         in_channels = 3
-        in_height = 128
+        in_height = 64
         # Initialize the VAE model
         model = VAE3(
             latent_dim=args.latent_dim,
             in_size=in_height,
             in_channels=in_channels,
-            hidden_dims=[32, 64, 128, 256, 512, 1024],
+            hidden_dims=[32, 64, 128, 256, 512],
         ).to(device)
     elif args.dataset.lower() == "fashion":
         transform = transforms.Compose(
@@ -356,6 +356,7 @@ def main(args):
         args.dataset.lower(),
         args.optimizer.lower(),
         args.scaler.lower(),
+        str(args.epochs) + "epochs",
         str(args.batch_size) + "batchsize",
         str(args.latent_dim) + "latent",
         str(args.run),

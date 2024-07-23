@@ -22,8 +22,8 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
             shared_params=list(
                 (
                     model.encoder.named_parameters(),
-                    model.mu.named_parameters(),
-                    model.log_var.named_parameters(),
+                    # model.mu.named_parameters(),
+                    # model.log_var.named_parameters(),
                 )
             ),
             task_specific_params={

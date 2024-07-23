@@ -233,8 +233,8 @@ class BasicBalancer(torch.nn.Module):
             losses=losses,
             shared_params=list(model.encoder.parameters()),
             task_specific_params={
-                "kl": model.encoder.parameters(),
-                "reconstruction": model.decoder.parameters(),
+                "reconstruction": model.decoder,
+                "kl": model.encoder,
             },
             shared_representation=hrepr,
             last_shared_layer_params=None,

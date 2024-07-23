@@ -2,21 +2,26 @@ import os
 from argparse import ArgumentParser
 from collections import defaultdict
 import pandas as pd
-
 import numpy as np
+from tqdm import tqdm
+
 import torch
 import torch.nn as nn
 import torchvision
-from matplotlib import pyplot as plt
 from torch.nn import functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 import torchvision.utils as vutils
-from tqdm import tqdm
+
 
 from models import VAE, VAE3
 from optim import AlignedMTLBalancer, LinearScalarization
+
+import matplotlib.pyplot as plt
+import scienceplots
+
+plt.style.use(["science", "ieee", "no-latex"])
 
 
 def set_seed(seed):

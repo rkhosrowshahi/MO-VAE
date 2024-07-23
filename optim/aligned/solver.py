@@ -13,7 +13,7 @@ class ProcrustesSolver:
             cov_grad_matrix_e = cov_grad_matrix_e.mean(0)
 
             # singulars, basis = torch.symeig(cov_grad_matrix_e, eigenvectors=True) ***DEPRECATED***
-            singulars, basis = torch.linalg.eig(
+            singulars, basis = torch.linalg.eigh(
                 cov_grad_matrix_e
             )  # singular is eigenvalue landa and basis is eigenvector V
             print(

@@ -472,7 +472,7 @@ if __name__ == "__main__":
     parser.add_argument("--beta", type=float, default=1)
     parser.add_argument("--gpu", type=int, default=0, help="gpu id")
     parser.add_argument(
-        "--output-path", type=str, default="./logs/", help="path to store the results"
+        "--output_path", type=str, default="./logs/", help="path to store the results"
     )
     parser.add_argument("--run", type=int, default=1, help="[1..10]")
     # parser.set_defaults(compute_stats=False)

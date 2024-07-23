@@ -187,9 +187,9 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     # plt.close()
 
     total_loss_values = [entry["train_loss"] for entry in train_metrics]
-    iterations = np.arange(1, len(total_loss_values) + 1)
-    plt.plot(iterations, total_loss_values, marker="o")
-    plt.xlabel("Epoch")
+    iterations = np.arange(1, len(total_loss_values) + 1, 100)
+    plt.plot(iterations, total_loss_values[iterations - 1], marker="o")
+    plt.xlabel("Iteration")
     plt.ylabel("Loss")
     plt.title("Total loss")
     plt.grid(True)
@@ -201,8 +201,8 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     recons_loss_values = [
         entry["task_losses"]["reconstruction"] for entry in train_metrics
     ]
-    plt.plot(iterations, recons_loss_values, marker="s")
-    plt.xlabel("Epoch")
+    plt.plot(iterations, recons_loss_values[iterations - 1], marker="s")
+    plt.xlabel("Iteration")
     plt.ylabel("Loss")
     plt.title("Reconstruction loss")
     plt.grid(True)
@@ -212,8 +212,8 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     # plt.show()
 
     kl_loss_values = [entry["task_losses"]["kl"] for entry in train_metrics]
-    plt.plot(iterations, kl_loss_values, marker="^")
-    plt.xlabel("Epoch")
+    plt.plot(iterations, kl_loss_values[iterations - 1], marker="^")
+    plt.xlabel("Iteration")
     plt.ylabel("Loss")
     plt.title(f"Beta KL-divergence ($\beta={beta}$) loss")
     plt.grid(True)
@@ -351,9 +351,9 @@ def main(args):
         args.dataset.lower(),
         args.optimizer.lower(),
         args.scaler.lower(),
-        str(args.batch_size),
-        str(args.latent_dim),
-        str(args.seed + args.run),
+        str(args.batch_size) + "batchsize",
+        str(args.latent_dim) + "latent",
+        str(args.run),
     )
     print(res_path)
     os.makedirs(res_path + "/figures", exist_ok=True)

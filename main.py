@@ -327,6 +327,9 @@ def main(args):
         ).to(device)
 
     print(f"Train size: {len(train_dataset)}, Test size: {len(test_dataset)}")
+    print(
+        f"Model total size: {sum(p.numel() for p in model.parameters())}, Encoder size: {sum(p.numel() for p in model.encoder.parameters())}, Latent repr size: {sum(p.numel() for p in model.mu.parameters())+sum(p.numel() for p in model.log_var.parameters())}, Decoder size: {sum(p.numel() for p in model.decoder.parameters())}"
+    )
     # Create data loaders
     batch_size = args.batch_size
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)

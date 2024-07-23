@@ -239,6 +239,7 @@ class BasicBalancer(torch.nn.Module):
             },
             shared_representation=hrepr,
             last_shared_layer_params=None,
+            model=model,
         )
 
     def step(

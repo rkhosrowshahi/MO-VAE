@@ -20,6 +20,7 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
         task_specific_params,
         shared_representation=None,
         last_shared_layer_params=None,
+        model=None,
     ):
         grads = self.get_G_wrt_shared(losses, shared_params, update_decoder_grads=True)
         grads, weights, singulars = ProcrustesSolver.apply(
@@ -40,6 +41,7 @@ class AlignedMTLBalancer(basic_balancer.BasicBalancer):
             # self.apply_decoder_scaling(task_specific_params, weights)
 
         # self.set_losses({task_id: losses[task_id] * weights[i] for i, task_id in enumerate(losses)})
+        self.zero_grad_model(model)
         total_loss = sum(
             losses[task_id] * weights[i] for i, task_id in enumerate(losses)
         )

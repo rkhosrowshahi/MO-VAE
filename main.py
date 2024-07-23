@@ -186,7 +186,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     # plt.savefig(os.path.join(save_path, "figures/generated_images.pdf"))
     # plt.close()
 
-    total_loss_values = [entry["train_loss"] for entry in train_metrics]
+    total_loss_values = np.array([entry["train_loss"] for entry in train_metrics])
     iterations = np.arange(1, len(total_loss_values) + 1, 100, dtype=int)
     plt.plot(iterations, total_loss_values[iterations - 1], marker="o")
     plt.xlabel("Iteration")
@@ -198,9 +198,9 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     plt.close()
     # plt.show()
 
-    recons_loss_values = [
-        entry["task_losses"]["reconstruction"] for entry in train_metrics
-    ]
+    recons_loss_values = np.array(
+        [entry["task_losses"]["reconstruction"] for entry in train_metrics]
+    )
     plt.plot(iterations, recons_loss_values[iterations - 1], marker="s")
     plt.xlabel("Iteration")
     plt.ylabel("Loss")
@@ -211,7 +211,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
     plt.close()
     # plt.show()
 
-    kl_loss_values = [entry["task_losses"]["kl"] for entry in train_metrics]
+    kl_loss_values = np.array([entry["task_losses"]["kl"] for entry in train_metrics])
     plt.plot(iterations, kl_loss_values[iterations - 1], marker="^")
     plt.xlabel("Iteration")
     plt.ylabel("Loss")

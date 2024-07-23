@@ -352,6 +352,7 @@ def main(args):
         str(args.latent_dim),
         str(args.seed + args.run),
     )
+    print(res_path)
     os.makedirs(res_path + "/figures", exist_ok=True)
     os.makedirs(res_path + "/data", exist_ok=True)
 
@@ -389,13 +390,13 @@ def main(args):
         ]
         kl_loss_values = [entry["task_losses"]["kl"] for entry in train_metrics]
         statistics = [entry["stats"] for entry in train_metrics]
-        np.savez(
-            os.path.join(save_path, "data/train_metrics_with_stats.npz"),
-            total_loss=total_loss_values,
-            recons_loss=recons_loss_values,
-            kl_loss=kl_loss_values,
-            stats=statistics,
-        )
+        # np.savez(
+        #     os.path.join(save_path, "data/train_metrics_with_stats.npz"),
+        #     total_loss=total_loss_values,
+        #     recons_loss=recons_loss_values,
+        #     kl_loss=kl_loss_values,
+        #     stats=statistics,
+        # )
         df = pd.DataFrame(
             {
                 "steps": range(1, args.epochs + 1),

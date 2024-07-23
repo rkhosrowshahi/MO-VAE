@@ -18,6 +18,8 @@ class ProcrustesSolver:
             )  # singular is eigenvalue landa and basis is eigenvector V
             print(
                 torch.max(singulars),
+            )
+            print(
                 max(cov_grad_matrix_e.shape[-2:]),
                 # torch.finfo().eps,
             )

@@ -231,10 +231,10 @@ class BasicBalancer(torch.nn.Module):
         losses, hrepr = self.compute_losses(data, model, criteria)
         self.step(
             losses=losses,
-            shared_params=list(model.parameters()),
+            shared_params=list(model.encoder.parameters()),
             task_specific_params={
                 "reconstruction": model.decoder,
-                # "kl": model.encoder,
+                "kl": torch.nn.Sequential([model.mu, model.log_var]),
             },
             shared_representation=hrepr,
             last_shared_layer_params=None,

@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from .types_ import *
 
 
 class PrintLayer(nn.Module):
@@ -138,7 +137,7 @@ class VAE3(nn.Module):
         # Forward pass
         self.forward(x)[0]
 
-    def sample(self, num_samples: int, current_device: int, **kwargs) -> Tensor:
+    def sample(self, num_samples: int, current_device: int, **kwargs) -> torch.Tensor:
         """
         Samples from the latent space and return the corresponding
         image space map.

@@ -138,7 +138,7 @@ def plot_after_training(model, data_loader, train_metrics, save_path, device, be
         nrow=12,
     )
 
-    reconstructed_data = model.generate(test_input)
+    reconstructed_data = model(test_input)[0]
     vutils.save_image(
         reconstructed_data.data,
         os.path.join(save_path, "figures/generated_images.png"),

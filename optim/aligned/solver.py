@@ -22,7 +22,7 @@ class ProcrustesSolver:
                 * max(cov_grad_matrix_e.shape[-2:])
                 * torch.finfo().eps
             )
-            print(torch.finfo().eps)
+
             rank = sum(singulars > tol)
             if rank == 0:
                 rank = 1
@@ -37,12 +37,8 @@ class ProcrustesSolver:
             elif scale_mode == "rmse":
                 weights = basis * torch.sqrt(singulars.mean())
 
-            print(weights)
             weights = weights / torch.sqrt(singulars).view(1, -1)
-            print(weights)
             weights = weights @ basis.T
             grads = grads @ weights.unsqueeze(0)
-            # weights = torch.matmul(weights, basis.T)
-            # grads = torch.matmul(grads, weights.unsqueeze(0))
 
             return grads, weights, singulars

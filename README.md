@@ -1,17 +1,19 @@
 # MO-VAE
-![Alt sample generated](outputs/figures/samples_generated.png)\
-A multi-objective representation learning in variational autoencoder to stabilize the gradients calculated by breaking down the evidence lower bound (ELBO) loss function into two objectives.
-Our proposed method, named aligned multi-objective VAE (Aligned-MO-VAE), inspired by the multi-task learning, integrates two objectives known as reconstrion error and KL divergence simulatenously to optimize parameters with a gradient system that has zero conflict with others.
+![Generated random samples](figures/cifar10/aligned_mtl/random_samples.png)
+![Reconstructed test samples](figures/cifar10/aligned_mtl/test_samples.png)
+![Reconstructed test samples](figures/cifar10/aligned_mtl/train_samples.png)
+A multi-objective representation learning approach for variational autoencoders that stabilizes gradients by decomposing the evidence lower bound (ELBO) into two complementary objectives.
+We explore a suite of multi-task gradient aggregation strategies—such as AlignedMTL, PCGrad, MGDA, and NashMTL—to jointly optimize the reconstruction error and KL divergence while keeping their gradient updates conflict-free.
 ## Installation
 * Close the repository
 ```
-git clone https://github.com/rkhosroshahli/MO-VAE
+git clone https://github.com/rkhosroshahi/MO-VAE
 cd MO-VAE
 ```
 * Let's create virtual environment (venv) in the project and install necessary packages using ```pip```.
 ```
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -36,3 +38,14 @@ python main.py --dataset cifar10  --arch vq_vae --epochs 200 --agg aligned_mtl -
 <!-- CONTACT -->
 ## Contact
 Rasa Khosrowshahli - rkhosrowshahli@brocku.ca
+
+## Citation
+If you find this repository helpful, please cite it as:
+```
+@misc{khosrowshahli2025aligned,
+  title        = {Multi-Objective Variational Autoencoders},
+  author       = {Rasa Khosrowshahli},
+  year         = {2025},
+  howpublished = {\url{https://github.com/rkhosroshahi/MO-VAE}},
+}
+```

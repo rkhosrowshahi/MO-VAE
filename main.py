@@ -1,483 +1,442 @@
 import os
+import time
 from argparse import ArgumentParser
-from collections import defaultdict
-import pandas as pd
+
 import numpy as np
+import torch
+import torch.optim as optim
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import torch
-import torch.nn as nn
-import torchvision
-from torch.nn import functional as F
-import torch.optim as optim
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader, Subset
-import torchvision.utils as vutils
-
-
-from models import VAE, VAE3
-from optim import AlignedMTLBalancer, LinearScalarization
-
+from torchjd import backward, mtl_backward
+from torchjd.aggregation import (
+    UPGrad,
+    PCGrad,
+    Mean,
+    AlignedMTL,
+    NashMTL,
+    IMTLG,
+    MGDA,
+    CAGrad,
+    DualProj,
+)
+import wandb
+from pymoo.indicators.hv import HV
 import matplotlib.pyplot as plt
 import scienceplots
+from torchvision.utils import make_grid
+
+from utils.utils import AverageMeter, get_dataset, set_seed
+from models import get_network
 
 plt.style.use(["science", "ieee", "no-latex"])
 
 
-def set_seed(seed):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
+    net.train()
+    loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
+    loss_meters["total_loss"] = AverageMeter()
 
+    for images, _ in train_loader:
+        images = images.to(device)
+        optimizer.zero_grad()
 
-def mse_recons_loss_sum(data, logits):
-    reconstructed_data = logits[0]
-    loss = F.mse_loss(reconstructed_data, data, reduction="sum")
-    return loss
+        outputs = net(images)
+        loss_dict = net.loss_function(images, args=outputs)
+        total_loss = sum(loss_dict.values())
 
+        if aggregator is None or aggregator == "none":
+            total_loss.backward()
+        else:
+            features = None
+            if "mu" in outputs and "log_var" in outputs:
+                features = [outputs["mu"], outputs["log_var"]]
+            if features is not None:
+                mtl_backward(loss_dict.values(), features=features, aggregator=aggregator)
+            else:
+                backward(loss_dict.values(), aggregator=aggregator)
 
-def mse_recons_loss(data, logits):
-    reconstructed_data = logits[0]
-    loss = F.mse_loss(reconstructed_data, data, reduction="mean")
-    return loss
-
-
-def bce_recons_loss(data, logits):
-    reconstructed_data = logits[0]
-    loss = F.binary_cross_entropy_with_logits(reconstructed_data, data, reduction="sum")
-    return loss
-
-
-# Beta-KL divergence loss
-def bkl_loss(data, logits):
-    mu, log_var = logits[1], logits[2]
-
-    beta = args.beta
-    # loss = beta * -0.5 * torch.mean(1 + log_var - mu ** 2 - log_var.exp())
-    kl = torch.mean(-0.5 * torch.sum(1 + log_var - mu**2 - log_var.exp(), dim=1), dim=0)
-    loss = beta * kl
-    return loss
-
-
-def eval_step(
-    model, train_dataset, batch_size, optimizer, balancer, device, train_loader=None
-):
-    if train_loader is None:
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    criteria = {"kl": bkl_loss, "reconstruction": mse_recons_loss_sum}
-    # Train the VAE model
-    model.train()
-    avg_total_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = (
-        0,
-        defaultdict(float),
-        defaultdict(float),
-        defaultdict(float),
-    )
-    for batch_idx, (data, _) in enumerate(train_loader):
-
-        balancer.step_with_model(data=data.to(device), model=model, criteria=criteria)
         optimizer.step()
-        losses = balancer.losses
-        loss_weights = balancer.loss_weights
-        info = balancer.info
-        avg_total_loss += sum(
-            losses[task_id] * loss_weights[task_id] for task_id in losses
-        )
-        for task_id in losses:
-            avg_task_losses[task_id] += losses[task_id]
-            avg_task_weights[task_id] += loss_weights[task_id]
 
-        for metric_id in info:
-            avg_comp_metrics[metric_id] += info[metric_id]
+        loss_meters["total_loss"].update(total_loss.item())
+        for key, value in loss_dict.items():
+            loss_meters[key].update(value.item())
 
-    avg_total_loss = avg_total_loss / len(train_loader)
-    for task_id in avg_task_losses:
-        avg_task_losses[task_id] /= len(train_loader)
-        avg_task_weights[task_id] /= len(train_loader)
+        step += 1
+        if args.use_wandb:
+            wandb.log(
+                {
+                    **{f"train/{key}": meter.avg for key, meter in loss_meters.items()},
+                    **{f"train/{key}_curr": meter.val for key, meter in loss_meters.items()},
+                },
+                step=step,
+            )
 
-    for metric_id in avg_comp_metrics:
-        avg_comp_metrics[metric_id] /= len(train_loader)
-
-    return avg_total_loss, avg_task_losses, avg_task_weights, avg_comp_metrics
+    return loss_meters, step
 
 
-def train_step(
-    model, optimizer, balancer, device, train_metrics=None, train_loader=None
+def eval_epoch(net, data_loader, device, args):
+    net.eval()
+    loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
+    loss_meters["total_loss"] = AverageMeter()
+
+    with torch.no_grad():
+        for images, _ in data_loader:
+            images = images.to(device)
+            outputs = net(images)
+            loss_dict = net.loss_function(images, args=outputs)
+            total_loss = sum(loss_dict.values())
+
+            loss_meters["total_loss"].update(total_loss.item())
+            for key, value in loss_dict.items():
+                loss_meters[key].update(value.item())
+
+    return loss_meters
+
+
+def generate_random_samples(net, num_samples, device, save_path=None, log_to_wandb=False, epoch=None, step=None):
+    samples = net.sample(num_samples=num_samples, device=device)
+    grid = make_grid(samples, nrow=int(np.sqrt(num_samples)), normalize=True)
+
+    if save_path is not None:
+        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
+        grid_np = np.clip(grid_np, 0, 1)
+
+        plt.figure(figsize=(10, 10))
+        plt.imshow(grid_np)
+        plt.axis("off")
+        plt.title("Generated Random Samples")
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close()
+
+    if log_to_wandb and epoch is not None:
+        wandb.log({"generated_samples": wandb.Image(grid, caption=f"Epoch {epoch}")}, step=step)
+
+    return samples
+
+
+def generate_reconstructed_samples(
+    net,
+    split_name,
+    loader,
+    num_samples,
+    device,
+    save_path=None,
+    log_to_wandb=False,
+    epoch=None,
+    step=None,
 ):
-    criteria = {"reconstruction": mse_recons_loss_sum, "kl": bkl_loss}
-    # Train the VAE model
-    model.train()
-    loss_total, task_losses, task_weights = 0, defaultdict(float), defaultdict(float)
-    for batch_idx, (data, _) in enumerate(train_loader):
+    net.eval()
+    originals, reconstructions = [], []
 
-        balancer.step_with_model(data=data.to(device), model=model, criteria=criteria)
-        optimizer.step()
-        losses = balancer.losses
-        loss_weights = balancer.loss_weights
-        # if hasattr(balancer, 'info') and balancer.info is not None:
-        #     fmtl_metrics.write(utils.strfy(balancer.info) + "\n")
-        #     fmtl_metrics.flush()
-        loss_total += sum(losses[task_id] * loss_weights[task_id] for task_id in losses)
-        for task_id in losses:
-            task_losses[task_id] += losses[task_id]
-            task_weights[task_id] += loss_weights[task_id]
+    with torch.no_grad():
+        collected = 0
+        for images, _ in loader:
+            if collected >= num_samples:
+                break
 
-        train_metrics.append(
-            {
-                "train_loss": loss_total,
-                "task_losses": losses,
-                "task_weights": loss_weights,
-            }
+            images = images.to(device)
+            take = min(images.size(0), num_samples - collected)
+            batch = images[:take]
+
+            outputs = net(batch)
+            recon = outputs.get("recons")
+            if recon is None:
+                raise KeyError("Model output dictionary must contain 'recons'.")
+
+            originals.append(batch.cpu())
+            reconstructions.append(recon.cpu())
+            collected += take
+
+    originals = torch.cat(originals, dim=0)
+    reconstructions = torch.cat(reconstructions, dim=0)
+
+    comparison = []
+    for idx in range(num_samples):
+        comparison.append(originals[idx])
+        comparison.append(reconstructions[idx])
+    comparison_tensor = torch.stack(comparison)
+    grid = make_grid(comparison_tensor, nrow=int(np.sqrt(num_samples)) * 2, normalize=True)
+
+    if save_path is not None:
+        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
+        grid_np = np.clip(grid_np, 0, 1)
+
+        plt.figure(figsize=(15, 15))
+        plt.imshow(grid_np)
+        plt.axis("off")
+        plt.title(f"Reconstructed {split_name} Samples (Original | Reconstructed)")
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close()
+
+    if log_to_wandb and epoch is not None:
+        wandb.log(
+            {f"reconstructed_{split_name}_samples": wandb.Image(grid, caption=f"Epoch {epoch}")},
+            step=step,
         )
-    avg_total_loss = loss_total / len(train_loader)
-    for task_id in task_losses:
-        task_losses[task_id] /= len(train_loader)
-        task_weights[task_id] /= len(train_loader)
-    return avg_total_loss, task_losses, task_weights
+
+    return originals, reconstructions
 
 
-def plot_after_training(model, data_loader, train_metrics, save_path, device, beta):
-    model.eval()
-    test_input, test_label = next(iter(data_loader))
-    test_input = test_input.to(device)
-    test_label = test_label.to(device)
+def build_hv_indicator(objective_keys, args):
+    if len(objective_keys) < 2:
+        return None
 
-    vutils.save_image(
-        test_input.data,
-        os.path.join(save_path, "figures/original_images.png"),
-        normalize=True,
-        nrow=12,
-    )
+    ref_point = []
+    for key in objective_keys:
+        if key == "reconstruction_loss":
+            ref_point.append(args.hv_ref_recon if args.hv_ref_recon is not None else 1e6)
+        elif key == "kl_loss":
+            ref_point.append(args.hv_ref_kl if args.hv_ref_kl is not None else 1000.0)
+        else:
+            ref_point.append(1e6)
 
-    reconstructed_data = model(test_input)[0]
-    vutils.save_image(
-        reconstructed_data.data,
-        os.path.join(save_path, "figures/generated_images.png"),
-        normalize=True,
-        nrow=12,
-    )
-
-    try:
-        samples = model.sample(144, device, labels=test_label)
-        vutils.save_image(
-            samples.cpu().data,
-            os.path.join(save_path, "figures/sampled_images.png"),
-            normalize=True,
-            nrow=12,
-        )
-    except Warning:
-        pass
-
-    # data = data.to(device)
-    # reconstructed_data = model(data)[0]
-
-    # orig_img = torchvision.utils.make_grid(data, nrow=n)
-    #         orig_img = np.transpose(orig_img.cpu().numpy(), (1, 2, 0))
-
-    #         recon_img = torchvision.utils.make_grid(reconstructed_data, nrow=n)
-    #         recon_img = np.transpose(recon_img.cpu().numpy(), (1, 2, 0))
-
-    # plt.imshow(orig_img)
-    # plt.axis("off")
-    # plt.title("Original Images")
-    # plt.savefig(os.path.join(save_path, "figures/original_images.png"))
-    # plt.savefig(os.path.join(save_path, "figures/original_images.pdf"))
-    # plt.close()
-
-    # plt.imshow(recon_img)
-    # plt.axis("off")
-    # plt.title("Generated Images")
-    # plt.savefig(os.path.join(save_path, "figures/generated_images.png"))
-    # plt.savefig(os.path.join(save_path, "figures/generated_images.pdf"))
-    # plt.close()
-
-    total_loss_values = np.array([entry["train_loss"] for entry in train_metrics])
-    iterations = np.arange(1, len(total_loss_values) + 1, 100, dtype=int)
-    plt.plot(iterations, total_loss_values[iterations - 1], marker="o")
-    plt.xlabel("Iteration")
-    plt.ylabel("Loss")
-    plt.title("Total loss")
-    plt.grid(True)
-    plt.savefig(os.path.join(save_path, "figures/total_loss_plot.png"))
-    plt.savefig(os.path.join(save_path, "figures/total_loss_plot.pdf"))
-    plt.close()
-    # plt.show()
-
-    recons_loss_values = np.array(
-        [entry["task_losses"]["reconstruction"] for entry in train_metrics]
-    )
-    plt.plot(iterations, recons_loss_values[iterations - 1], marker="s")
-    plt.xlabel("Iteration")
-    plt.ylabel("Loss")
-    plt.title("Reconstruction loss")
-    plt.grid(True)
-    plt.savefig(os.path.join(save_path, "figures/reconstruction_loss_plot.png"))
-    plt.savefig(os.path.join(save_path, "figures/reconstruction_loss_plot.pdf"))
-    plt.close()
-    # plt.show()
-
-    kl_loss_values = np.array([entry["task_losses"]["kl"] for entry in train_metrics])
-    plt.plot(iterations, kl_loss_values[iterations - 1], marker="^")
-    plt.xlabel("Iteration")
-    plt.ylabel("Loss")
-    plt.title("Beta KL-divergence" + r"$(\beta={beta})$" + "loss")
-    plt.grid(True)
-    plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.png"))
-    plt.savefig(os.path.join(save_path, "figures/kl_loss_plot.pdf"))
-    plt.close()
-
-    # np.savez(
-    #     os.path.join(save_path, "data/train_metrics.npz"),
-    #     total_loss=total_loss_values,
-    #     recons_loss=recons_loss_values,
-    #     kl_loss=kl_loss_values,
-    # )
-    rec_loss_w = [entry["task_weights"]["reconstruction"] for entry in train_metrics]
-    kl_loss_w = [entry["task_weights"]["kl"] for entry in train_metrics]
-
-    df = pd.DataFrame(
-        {
-            "steps": np.arange(1, len(total_loss_values) + 1, dtype=int),
-            "total_loss": total_loss_values,
-            "rec_loss": recons_loss_values,
-            "rec_weight": rec_loss_w,
-            "kl_loss": kl_loss_values,
-            "kl_weight": kl_loss_w,
-        }
-    )
-    df.to_csv(os.path.join(save_path, "data/train_metrics.csv"), index=False)
+    return HV(ref_point=np.array(ref_point))
 
 
 def main(args):
-    # Define the device (GPU or CPU)
-    if torch.cuda.device_count() == 1:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device)
+
+    train_dataset, test_dataset, input_size, _, _ = get_dataset(args.dataset, normalize=args.normalize)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=True,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+    )
+
+    net = get_network(input_size, num_channels=3, args=args).to(device)
+    args.total_params = net.total_trainable_params()
+
+    if args.optimizer == "sgd":
+        optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.wd)
+    elif args.optimizer == "adam":
+        optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd)
+    elif args.optimizer == "adamw":
+        optimizer = optim.AdamW(net.parameters(), lr=args.lr, weight_decay=args.wd)
+    elif args.optimizer == "rmsprop":
+        optimizer = optim.RMSprop(net.parameters(), lr=args.lr, weight_decay=args.wd)
     else:
-        device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
-    print(device)
+        raise ValueError(f"Optimizer {args.optimizer} not supported")
 
-    in_channels = 0
-    in_height = 0
-    train_dataset, test_dataset = None, None
-    model = None
-    if args.dataset.lower() == "cifar10":
-        # Load the CIFAR10 dataset
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
-                # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-            ]
-        )
-        train_dataset = datasets.CIFAR10(
-            root="./data", train=True, download=True, transform=transform
-        )
-        test_dataset = datasets.CIFAR10(
-            root="./data", train=False, download=True, transform=transform
-        )
-        in_channels = 3
-        in_height = 32
-        # Initialize the VAE model
-        model = VAE3(
-            latent_dim=args.latent_dim,
-            in_size=in_height,
-            in_channels=in_channels,
-            hidden_dims=[32, 64, 128, 256],
-        ).to(device)
-    elif args.dataset.lower() == "celeba":
-        # Load the CelebA dataset
-        transform = transforms.Compose(
-            [
-                transforms.RandomHorizontalFlip(),
-                transforms.CenterCrop(148),
-                transforms.Resize(64),
-                transforms.ToTensor(),
-            ]
-        )
-        train_dataset = datasets.CelebA(
-            root="./data", split="train", download=True, transform=transform
-        )
-        test_dataset = datasets.CelebA(
-            root="./data", split="test", download=True, transform=transform
-        )
-        in_channels = 3
-        in_height = 64
-        # Initialize the VAE model
-        model = VAE3(
-            latent_dim=args.latent_dim,
-            in_size=in_height,
-            in_channels=in_channels,
-            hidden_dims=[32, 64, 128, 256, 512],
-        ).to(device)
-    elif args.dataset.lower() == "fashion":
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
-                transforms.Normalize(0.5, 0.5),
-            ]
-        )
-        # Load the Fashion dataset
-        train_dataset = datasets.FashionMNIST(
-            root="./data", train=True, download=True, transform=transform
-        )
-        test_dataset = datasets.FashionMNIST(
-            root="./data", train=False, download=True, transform=transform
-        )
-        in_channels = 1
-        in_height = 28
-        # Initialize the VAE model
-        model = VAE(
-            latent_dim=args.latent_dim, in_height=in_height, in_channels=in_channels
-        ).to(device)
+    scheduler = None
+    if args.scheduler is not None:
+        if args.scheduler == "cosine":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr_min)
+        elif args.scheduler == "multi_step":
+            scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+        else:
+            raise ValueError(f"Scheduler {args.scheduler} not supported")
 
-    print(f"Train size: {len(train_dataset)}, Test size: {len(test_dataset)}")
+    aggregator = None
+    if args.aggregator is not None:
+        agg_name = args.aggregator.lower()
+        if agg_name == "upgrad":
+            aggregator = UPGrad()
+        elif agg_name == "pcgrad":
+            aggregator = PCGrad()
+        elif agg_name == "mean":
+            aggregator = Mean()
+        elif agg_name == "aligned_mtl":
+            aggregator = AlignedMTL()
+        elif agg_name == "imtlg":
+            aggregator = IMTLG()
+        elif agg_name == "mgda":
+            aggregator = MGDA()
+        elif agg_name == "cagrad":
+            aggregator = CAGrad()
+        elif agg_name == "nashmtl":
+            aggregator = NashMTL()
+        elif agg_name == "dualproj":
+            aggregator = DualProj()
+        elif agg_name == "none":
+            aggregator = "none"
+        else:
+            raise ValueError(f"Aggregator {args.aggregator} not supported")
+    else:
+        args.aggregator = "none"
+
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    save_root = os.path.join(args.save_path, args.dataset, args.arch, args.optimizer, args.aggregator, timestamp)
+    os.makedirs(os.path.join(save_root, "figures", "generated"), exist_ok=True)
+    os.makedirs(os.path.join(save_root, "figures", "reconstructed"), exist_ok=True)
+    os.makedirs(os.path.join(save_root, "checkpoints"), exist_ok=True)
+
+    if args.use_wandb:
+        wandb.init(
+            project=args.wandb_project,
+            entity=args.wandb_entity,
+            name=args.wandb_name if args.wandb_name else None,
+            config=vars(args),
+            dir=save_root,
+            tags=args.wandb_tags if args.wandb_tags else None,
+        )
+
+    eval_loss_meters = eval_epoch(net, train_loader, device=device, args=args)
     print(
-        f"Model total size: {sum(p.numel() for p in model.parameters())}, Encoder size: {sum(p.numel() for p in model.encoder.parameters())}, Latent repr size: {sum(p.numel() for p in model.mu.parameters())+sum(p.numel() for p in model.log_var.parameters())}, Decoder size: {sum(p.numel() for p in model.decoder.parameters())}"
+        "Initial random loss: "
+        + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
     )
-    # Create data loaders
-    batch_size = args.batch_size
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=144, shuffle=False)
 
-    # Initialize the optimizer and scheduler
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    objective_keys = [key for key in eval_loss_meters.keys() if key != "total_loss"]
+    hv_indicator = build_hv_indicator(objective_keys, args)
 
-    balancer = None
-    if args.optimizer == "multi":
-        balancer = AlignedMTLBalancer(
-            scale_mode=args.scaler, compute_stats=args.compute_stats
+    step = 0
+    for epoch in tqdm(range(1, args.epochs + 1)):
+        train_loss_meters, step = train_epoch(
+            net,
+            train_loader=train_loader,
+            optimizer=optimizer,
+            aggregator=aggregator,
+            step=step,
+            device=device,
+            args=args,
         )
-    elif args.optimizer == "single":
-        balancer = LinearScalarization(compute_stats=args.compute_stats)
+        eval_loss_meters = eval_epoch(net, test_loader, device=device, args=args)
 
-    res_path = os.path.join(
-        args.output_path,
-        args.dataset.lower(),
-        args.optimizer.lower(),
-        args.scaler.lower(),
-        str(args.epochs) + "epochs",
-        str(args.batch_size) + "batchsize",
-        str(args.latent_dim) + "latent",
-        str(args.run),
-    )
-    print(res_path)
-    os.makedirs(res_path + "/figures", exist_ok=True)
-    os.makedirs(res_path + "/data", exist_ok=True)
-
-    if args.compute_stats:
-        print("Computing statistics...")
-
-        train_metrics = []
-        for epoch in tqdm(range(args.epochs)):
-            avg_train_loss, avg_task_losses, avg_task_weights, avg_comp_metrics = (
-                eval_step(
-                    model,
-                    train_dataset,
-                    batch_size,
-                    optimizer,
-                    balancer,
-                    device,
-                    train_loader=train_loader,
-                )
+        if (epoch % args.save_freq == 0) or epoch in {1, args.epochs}:
+            gen_path = os.path.join(save_root, "figures", "generated", f"epoch_{epoch:03d}_random_samples.pdf")
+            generate_random_samples(
+                net,
+                num_samples=args.num_samples,
+                device=device,
+                save_path=gen_path,
+                log_to_wandb=args.use_wandb,
+                epoch=epoch,
+                step=step,
             )
-            train_metrics.append(
-                {
-                    "train_loss": avg_train_loss,
-                    "task_losses": avg_task_losses,
-                    "stats": avg_comp_metrics,
-                }
-            )
-        save_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler_beta/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
-        # os.makedirs(save_path, exist_ok=True)
-        os.makedirs(save_path + "figures", exist_ok=True)
-        os.makedirs(save_path + "data", exist_ok=True)
 
-        total_loss_values = [entry["train_loss"] for entry in train_metrics]
-        recons_loss_values = [
-            entry["task_losses"]["reconstruction"] for entry in train_metrics
-        ]
-        kl_loss_values = [entry["task_losses"]["kl"] for entry in train_metrics]
-        statistics = [entry["stats"] for entry in train_metrics]
-        # np.savez(
-        #     os.path.join(save_path, "data/train_metrics_with_stats.npz"),
-        #     total_loss=total_loss_values,
-        #     recons_loss=recons_loss_values,
-        #     kl_loss=kl_loss_values,
-        #     stats=statistics,
-        # )
-        df = pd.DataFrame(
-            {
-                "steps": range(1, args.epochs + 1),
-                "total_loss": total_loss_values,
-                "rec_loss": recons_loss_values,
-                "kl_loss": kl_loss_values,
-            }
-        )
-        df.to_csv(
-            os.path.join(save_path, "data/train_metrics_with_stats.csv"), index=False
-        )
-    else:
-
-        train_metrics = []
-        for epoch in range(args.epochs):
-            avg_train_loss, avg_task_losses, avg_task_weights = train_step(
-                model,
-                optimizer,
-                balancer,
+            test_path = os.path.join(save_root, "figures", "reconstructed", f"epoch_{epoch:03d}_test_samples.pdf")
+            generate_reconstructed_samples(
+                net,
+                "test",
+                test_loader,
+                args.num_samples,
                 device,
-                train_metrics,
-                train_loader=train_loader,
+                save_path=test_path,
+                log_to_wandb=args.use_wandb,
+                epoch=epoch,
+                step=step,
             )
-            # Print the loss at each epoch
-            print(f"Epoch: {epoch}, ", f"avg_train_loss: {avg_train_loss}, ", end=" ")
-            for task_id in avg_task_losses:
-                print(
-                    "loss_{}: {:.6e}, weight_{}:{:.6f}".format(
-                        task_id,
-                        avg_task_losses[task_id],
-                        task_id,
-                        avg_task_weights[task_id],
-                    ),
-                    end=", ",
-                )
-            print()
 
-            # print(f'curr_LR: {scheduler.get_last_lr()}')
-            # Update the scheduler
-            # scheduler.step()
+            train_path = os.path.join(save_root, "figures", "reconstructed", f"epoch_{epoch:03d}_train_samples.pdf")
+            generate_reconstructed_samples(
+                net,
+                "train",
+                train_loader,
+                args.num_samples,
+                device,
+                save_path=train_path,
+                log_to_wandb=args.use_wandb,
+                epoch=epoch,
+                step=step,
+            )
 
-        # res_path = f"./outputs/{args.dataset}/{args.optimizer}_{args.scaler}-scaler/{args.epochs}epochs_{args.batch_size}batchsize_{args.seed}seed/"
-        # os.makedirs(save_path, exist_ok=True)
-        # Save the checkpoint of model
-        torch.save(model.state_dict(), os.path.join(res_path, "data/model_weights.pth"))
-        # Evaluate model to generate images
-        plot_after_training(
-            model, test_loader, train_metrics, res_path, device, args.beta
+        if hv_indicator is not None:
+            train_point = np.array([[train_loss_meters[key].avg for key in objective_keys]])
+            eval_point = np.array([[eval_loss_meters[key].avg for key in objective_keys]])
+            train_hv = hv_indicator(train_point)
+            eval_hv = hv_indicator(eval_point)
+        else:
+            train_hv = float("nan")
+            eval_hv = float("nan")
+
+        log_dict = {
+            "epoch": epoch,
+            **{f"train/{key}": meter.avg for key, meter in train_loss_meters.items()},
+            **{f"eval/{key}": meter.avg for key, meter in eval_loss_meters.items()},
+            "train/hv": train_hv,
+            "eval/hv": eval_hv,
+            "train/lr": optimizer.param_groups[0]["lr"],
+        }
+
+        if args.use_wandb:
+            wandb.log(log_dict, step=step)
+
+        if scheduler is not None:
+            scheduler.step()
+
+        tqdm.write(
+            f" Epoch {epoch}/{args.epochs} - Train - "
+            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in train_loss_meters.items())
+            + f", HV: {train_hv:.2e}"
         )
+        tqdm.write(
+            f" Epoch {epoch}/{args.epochs} - Eval - "
+            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
+            + f", HV: {eval_hv:.2e}"
+        )
+
+    tqdm.write("Training completed!")
+    final_ckpt = os.path.join(save_root, "checkpoints", "final_checkpoint.pth")
+    torch.save(net.state_dict(), final_ckpt)
+
+    if args.use_wandb:
+        try:
+            wandb.save(final_ckpt)
+        except (OSError, PermissionError):
+            try:
+                artifact = wandb.Artifact("final_model", type="model")
+                artifact.add_file(final_ckpt)
+                wandb.log_artifact(artifact)
+            except Exception:
+                wandb.log({"final_checkpoint_path": final_ckpt})
+        wandb.finish()
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
+
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--save_path", type=str, default="logs/")
     parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--optimizer", type=str, default="multi")
-    parser.add_argument(
-        "--scaler", type=str, default="min", choices=["linear", "min", "median", "rmse"]
-    )
-    parser.add_argument("--lr", type=float, default="0.001")
     parser.add_argument("--dataset", type=str, default="CIFAR10")
+    parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--compute_stats", action="store_true")
+    parser.add_argument("--aggregator", "--agg", type=str, default=None)
+    parser.add_argument("--arch", type=str, default="vae")
+    parser.add_argument("--layer_norm", type=str, default="batch")
+    parser.add_argument("--output_activation", type=str, default="tanh")
     parser.add_argument("--latent_dim", type=int, default=128)
-    parser.add_argument("--beta", type=float, default=1)
-    parser.add_argument("--gpu", type=int, default=0, help="gpu id")
-    parser.add_argument(
-        "--output_path", type=str, default="./logs/", help="path to store the results"
-    )
-    parser.add_argument("--run", type=int, default=1, help="[1..10]")
-    # parser.set_defaults(compute_stats=False)
+    parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
+    parser.add_argument("--objs", type=str, nargs="+", default=["mse_sum", "kl_sum"])
+    parser.add_argument("--optimizer", type=str, default="adam")
+    parser.add_argument("--momentum", type=float, default=0.9)
+    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--wd", "--weight_decay", type=float, default=5e-4)
+    parser.add_argument("--scheduler", type=str, default=None)
+    parser.add_argument("--lr_min", type=float, default=0.0)
+    parser.add_argument("--gamma", type=float, default=0.1)
+    parser.add_argument("--milestones", type=int, nargs="+", default=None)
+    parser.add_argument("--embedding_dim", type=int, default=64)
+    parser.add_argument("--num_embeddings", type=int, default=512)
+    parser.add_argument("--alpha", type=float, default=1.0)
+    parser.add_argument("--beta", type=float, default=1.0)
+    parser.add_argument("--hv_ref_recon", type=float, default=None)
+    parser.add_argument("--hv_ref_kl", type=float, default=None)
+    parser.add_argument("--num_samples", type=int, default=64)
+    parser.add_argument("--save_freq", type=int, default=10)
+    parser.add_argument("--use_wandb", action="store_true")
+    parser.add_argument("--wandb_project", type=str, default="mo-vae")
+    parser.add_argument("--wandb_entity", type=str, default=None)
+    parser.add_argument("--wandb_name", type=str, default=None)
+    parser.add_argument("--wandb_tags", type=str, nargs="+", default=None)
 
     args = parser.parse_args()
-    set_seed(args.seed + args.run)
+    if args.seed is not None:
+        set_seed(args.seed)
     main(args)

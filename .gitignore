@@ -1,8 +1,11 @@
 .venv
 .idea
 data
+outputs/
 .ipynb_checkpoints
 *.ipynb
 __pycache__
 *.pptx
+archive/
+pyrightconfig.json
 logs/

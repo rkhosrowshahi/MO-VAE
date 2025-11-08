@@ -17,17 +17,21 @@ pip install -r requirements.txt
 
 <!-- USAGE EXAMPLES -->
 ## Usage
-* Train VAE on CIFAR10 with aligned multi-objective learning algorithm with min scaler
+* Train VAE on CIFAR10 with aligned-mtl
 ```
-python .\main.py --epochs 100 --optimizer multi --lr 0.001 --batch_size 32 --scaler min --seed 52 --dataset CIFAR10
+python main.py --dataset cifar10 --epochs 200 --agg aligned_mtl --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 --objs mse_sum kl_mean --output_activation tanh --normalize --use_wandb --wandb_name "128d mse_sum + kl_mean tanh amtl"
 ```
-* Train VAE on CIFAR10 with aligned multi-objective learning algorithm with RMSE scaler
+* Train VAE on CIFAR10 with UPGrad
 ```
-python .\main.py --epochs 100 --optimizer multi --lr 0.001 --batch_size 32 --scaler rmse --seed 52 --dataset CIFAR10
+python main.py --dataset cifar10 --epochs 200 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 --objs mse_sum kl_mean --output_activation tanh --normalize --use_wandb --wandb_name "128d mse_sum + kl_mean tanh upgrad"
 ```
-* Train VAE on CIFAR10 with uniform weighted-sum loss function
+* Train VQ-VAE on CIFAR10
 ```
-python .\main.py --epochs 100 --optimizer single --lr 0.001 --batch_size 32 --scaler linear --seed 52 --dataset CIFAR10
+python main.py --dataset cifar10  --arch vq_vae --epochs 200 --agg aligned_mtl --optimizer adamw --lr 0.001 --save_freq 10 --use_wandb --wandb_name "vq_vae emb_dim=64 num_emb=512 w/o activation" --embedding_dim 64 --num_embedding 512 --objs mse_sum --output_activation none --normalize
+```
+* Train VQ-VAE on CIFAR10 with tanh output activation and normalize dataset
+```
+python main.py --dataset cifar10  --arch vq_vae --epochs 200 --agg aligned_mtl --optimizer adamw --lr 0.001 --save_freq 10 --use_wandb --wandb_name "vq_vae emb_dim=64 num_emb=512 tanh" --embedding_dim 64 --num_embedding 512 --objs mse_mean --output_activation tanh --normalize --beta 0.25
 ```
 <!-- CONTACT -->
 ## Contact

@@ -3,7 +3,7 @@
 
 dataset: cifar100
 arch: vq_vae
-epochs: 10
+epochs: 100
 batch_size: 128
 optimizer: adam
 lr: 0.001

@@ -1,23 +1,23 @@
-# CelebA VQ-VAE Configuration - MGDA Aggregator
-# This configuration trains a VQ-VAE on CelebA dataset with MSE mean objective
+# CIFAR100 VQ-VAE Configuration - Sum Objectives (BCE)
+# This configuration trains a VQ-VAE on CIFAR100 dataset with BCE mean objective
 
-dataset: CelebA
+dataset: cifar100
 arch: vq_vae
 epochs: 10
 batch_size: 128
 optimizer: adam
 lr: 0.001
 wd: 0.0001
-aggregator: mgda
-normalize: true
+aggregator: sum
+normalize: false
 
 # Model architecture
 embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
-objs: [mse_mean]
+objs: [bce_mean]
 beta: 0.25
-output_activation: tanh
+output_activation: sigmoid
 
 # Training settings
 seed: 42
@@ -33,6 +33,6 @@ hv_ref_recon: 1.1
 use_wandb: false
 wandb_project: mo-vae
 wandb_entity: rasa_thesis
-wandb_name: "celeba vq_vae mse MGDA"
+wandb_name: "cifar100 vq_vae bce sum"
 
 

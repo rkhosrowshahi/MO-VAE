@@ -23,6 +23,7 @@ class VectorQuantizer(nn.Module):
         self.K = num_embeddings
         self.D = embedding_dim
         self.beta = beta
+        self._summary_mode = False
 
         self.embedding = nn.Embedding(self.K, self.D)
         self.embedding.weight.data.uniform_(-1 / self.K, 1 / self.K)
@@ -57,7 +58,12 @@ class VectorQuantizer(nn.Module):
         # Add the residue back to the latents
         quantized_latents = latents + (quantized_latents - latents).detach()
 
-        return quantized_latents.permute(0, 3, 1, 2).contiguous(), commitment_loss, embedding_loss  # [B x D x H x W]
+        quantized_latents = quantized_latents.permute(0, 3, 1, 2).contiguous()  # [B x D x H x W]
+
+        if getattr(self, "_summary_mode", False):
+            return quantized_latents
+
+        return quantized_latents, commitment_loss, embedding_loss
 
 
 class ResidualLayer(nn.Module):
@@ -103,6 +109,7 @@ class VQVAE(nn.Module):
         self.input_size = input_size
         self.in_channels = in_channels
         self.beta = beta
+        self._summary_mode = False
         
         # Calculate spatial dimensions of latent space
         # Each encoder layer with stride=2 halves the spatial dimension
@@ -255,14 +262,24 @@ class VQVAE(nn.Module):
 
     def forward(self, input: Tensor, **kwargs) -> Dict[str, Any]:
         encoding = self.encode(input)
-        quantized_inputs, commitment_loss, embedding_loss = self.vq_layer(encoding)
-        return {
+        vq_outputs = self.vq_layer(encoding)
+
+        if isinstance(vq_outputs, tuple):
+            quantized_inputs, commitment_loss, embedding_loss = vq_outputs
+        else:
+            quantized_inputs = vq_outputs
+            commitment_loss, embedding_loss = None, None
+
+        outputs = {
             "recons": self.decode(quantized_inputs),
             "quantized_inputs": quantized_inputs,
             "encoding": encoding,
             "commitment_loss": commitment_loss,
             "embedding_loss": embedding_loss,
         }
+        if getattr(self, "_summary_mode", False):
+            return outputs["recons"]
+        return outputs
     
     def loss_function(self, inputs, args: dict) -> dict:
         """
@@ -340,8 +357,23 @@ class VQVAE(nn.Module):
         """
         Prints the model summary
         """
+        was_training = self.training
         try:
-            return summary(self, (self.in_channels, self.input_size, self.input_size))
+            self._summary_mode = True
+            self.vq_layer._summary_mode = True
+            self.train(False)
+            param_device = next(self.parameters()).device
+            summary_device = "cuda" if param_device.type == "cuda" else "cpu"
+            result = summary(
+                self,
+                (self.in_channels, self.input_size, self.input_size),
+                device=summary_device,
+            )
+            return result
         except Exception as e:
             print(f"Error printing model summary: {e}")
             return None
+        finally:
+            self._summary_mode = False
+            self.vq_layer._summary_mode = False
+            self.train(was_training)

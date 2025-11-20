@@ -1,14 +1,14 @@
-# CelebA VQ-VAE Configuration - MGDA Aggregator
-# This configuration trains a VQ-VAE on CelebA dataset with MSE mean objective
+# CIFAR100 VQ-VAE Configuration - AlignedMTL Aggregator
+# This configuration trains a VQ-VAE on CIFAR100 dataset with MSE mean objective
 
-dataset: CelebA
+dataset: cifar100
 arch: vq_vae
 epochs: 10
 batch_size: 128
 optimizer: adam
 lr: 0.001
 wd: 0.0001
-aggregator: mgda
+aggregator: aligned_mtl
 normalize: true
 
 # Model architecture
@@ -33,6 +33,6 @@ hv_ref_recon: 1.1
 use_wandb: false
 wandb_project: mo-vae
 wandb_entity: rasa_thesis
-wandb_name: "celeba vq_vae mse MGDA"
+wandb_name: "cifar100 vq_vae mse aligned_mtl"
 
 

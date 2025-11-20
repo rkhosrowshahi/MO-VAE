@@ -21,6 +21,7 @@ output_activation: tanh
 
 # Training settings
 seed: 42
+num_workers: 4
 device: cuda:0
 save_path: logs/
 save_freq: 10

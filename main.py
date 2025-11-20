@@ -292,7 +292,7 @@ def main(args):
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=0,
+        num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
     )
@@ -300,7 +300,7 @@ def main(args):
         test_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0,
+        num_workers=args.num_workers,
         pin_memory=True,
         drop_last=False,
     )
@@ -504,6 +504,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="CIFAR10")
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--aggregator", "--agg", type=str, default=None)
     parser.add_argument("--arch", type=str, default="vae")
     parser.add_argument("--layer_norm", type=str, default="batch")

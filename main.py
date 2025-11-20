@@ -75,6 +75,9 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
         loss_dict = net.loss_function(images, args=outputs)
         total_loss = sum(loss_dict.values())
 
+        if total_loss.item() > 1e15:
+            print(f"EXPLODING: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
+
         # Verify decoder gradients match between mtl_backward and standard backward
         # This ensures that KLD (which doesn't use decoder) doesn't affect decoder gradients via MTL
         # if step == 0 and aggregator is not None and aggregator != "sum":

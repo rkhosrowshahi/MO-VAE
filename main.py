@@ -23,6 +23,8 @@ from torchjd.aggregation import (
 )
 import wandb
 from pymoo.indicators.hv import HV
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to avoid tkinter issues
 import matplotlib.pyplot as plt
 import scienceplots
 from torchvision.utils import make_grid

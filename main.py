@@ -326,9 +326,9 @@ def main(args):
     scheduler = None
     if args.scheduler is not None:
         if args.scheduler == "cosine":
-            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr_min)
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.scheduler_lr_min)
         elif args.scheduler == "multi_step":
-            scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+            scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.scheduler_milestones, gamma=args.scheduler_gamma)
         else:
             raise ValueError(f"Scheduler {args.scheduler} not supported")
 
@@ -517,9 +517,9 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--wd", "--weight_decay", type=float, default=5e-4)
     parser.add_argument("--scheduler", type=str, default=None)
-    parser.add_argument("--lr_min", type=float, default=0.0)
-    parser.add_argument("--gamma", type=float, default=0.1)
-    parser.add_argument("--milestones", type=int, nargs="+", default=None)
+    parser.add_argument("--scheduler_lr_min", type=float, default=0.0)
+    parser.add_argument("--scheduler_gamma", type=float, default=0.1)
+    parser.add_argument("--scheduler_milestones", type=int, nargs="+", default=None)
     parser.add_argument("--embedding_dim", type=int, default=64)
     parser.add_argument("--num_embeddings", type=int, default=512)
     parser.add_argument("--alpha", type=float, default=1.0)

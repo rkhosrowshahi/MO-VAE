@@ -286,7 +286,7 @@ def build_hv_indicator(objective_keys, args):
 def main(args):
     device = torch.device(args.device)
 
-    train_dataset, test_dataset, input_size, _, _ = get_dataset(args.dataset, normalize=args.normalize)
+    train_dataset, test_dataset, input_size = get_dataset(args.dataset, normalize=args.normalize)
 
     train_loader = DataLoader(
         train_dataset,

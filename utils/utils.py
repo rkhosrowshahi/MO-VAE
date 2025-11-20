@@ -152,4 +152,4 @@ def get_dataset(dataset_name, normalize=False):
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 
-    return train_dataset, test_dataset, input_size, num_classes, class_names
+    return train_dataset, test_dataset, input_size

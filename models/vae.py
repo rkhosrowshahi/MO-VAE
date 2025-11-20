@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torchsummary import summary
 
-from utils.objectives import mse_recon_sum, mse_recon_mean, bce_recon_sum, bce_recon_mean, kl_divergence_mean, kl_divergence_sum
+from utils.objectives import mse_recon_batch_mean, mse_recon_mean, bce_recon_batch_mean, bce_recon_mean, kl_divergence
 
 
 class PrintLayer(nn.Module):
@@ -26,36 +26,38 @@ class UnFlatten(nn.Module):
 
 # Define the VAE model
 class VAE(nn.Module):
-    def __init__(self, latent_dim=2, input_size=32, in_channels=3, hidden_dims=None, layer_norm="batch", output_activation="tanh", objs=["mse_sum", "kl_sum"], beta=1.0):
+    def __init__(self, latent_dim=2, input_size=32, in_channels=3, hidden_dims=None, layer_norm="batch", output_activation="tanh", objs=["mse_sum", "kl_sum"], kld_weight=0.00025, beta=1.0):
         super(VAE, self).__init__()
         
         recon_obj = None
         kl_obj = None
-        if "mse_sum" in objs:
-            recon_obj = mse_recon_sum
+        if "mse_batch_mean" in objs:
+            recon_obj = mse_recon_batch_mean
         elif "mse_mean" in objs:
             recon_obj = mse_recon_mean
-        elif "bce_sum" in objs:
-            recon_obj = bce_recon_sum
+        elif "bce_batch_mean" in objs:
+            recon_obj = bce_recon_batch_mean
             output_activation = "sigmoid"
         elif "bce_mean" in objs:
             recon_obj = bce_recon_mean
             output_activation = "sigmoid"
         else:
             raise ValueError(f"Reconstruction objective {objs} not supported")
-        if "kl_mean" in objs:
-            kl_obj = kl_divergence_mean
-        elif "kl_sum" in objs:
-            kl_obj = kl_divergence_sum
+        if "kld" in objs:
+            kld_obj = kl_divergence
         else:
             raise ValueError(f"KL divergence objective {objs} not supported")
 
-        self.objectives = {"reconstruction_loss": recon_obj, "kl_loss": kl_obj}
-        
         self.recon_obj = recon_obj
-        self.kl_obj = kl_obj
+        self.kld_obj = kld_obj
 
+        self.objectives = {"reconstruction_loss": recon_obj, "kld_loss": kld_obj}
+
+        self.features = ["mu", "log_var"]
+
+        self.kld_weight = kld_weight
         self.beta = beta
+        
         self.latent_dim = latent_dim
 
         if hidden_dims is None:
@@ -186,10 +188,10 @@ class VAE(nn.Module):
         log_var = args["log_var"]
 
         recon_loss = self.objectives["reconstruction_loss"](inputs, recons)
-        kl_loss = self.beta * self.objectives["kl_loss"](mu, log_var)
+        kld_loss = self.beta * self.kld_weight * self.objectives["kld_loss"](mu, log_var)
         
 
-        return {"reconstruction_loss": recon_loss, "kl_loss": kl_loss}
+        return {"reconstruction_loss": recon_loss, "kld_loss": kld_loss}
 
     def sample(self, num_samples=1, device=None):
         """

@@ -45,7 +45,7 @@ def get_dataset(dataset_name, normalize=False):
         
         if normalize:
             transform_train.append(transforms.Normalize(mean, std))
-            transform_test.append(transforms.Normalize(mean, std)) # type: ignore
+            transform_test.append(transforms.Normalize(mean, std))
 
         transform_train = transforms.Compose(transform_train)
         transform_test = transforms.Compose(transform_test)
@@ -74,7 +74,7 @@ def get_dataset(dataset_name, normalize=False):
 
         if normalize:
             transform_train.append(transforms.Normalize(mean, std))
-            transform_test.append(transforms.Normalize(mean, std)) # type: ignore
+            transform_test.append(transforms.Normalize(mean, std))
 
         transform_train = transforms.Compose(transform_train)
         transform_test = transforms.Compose(transform_test)

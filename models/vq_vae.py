@@ -6,7 +6,9 @@ import torch.nn.functional as F
 from torch import Tensor
 from torchsummary import summary
 
-from utils.objectives import mse_recon_sum, mse_recon_mean
+from utils.objectives import mse_recon_batch_mean, mse_recon_mean
+from utils.objectives import bce_recon_batch_mean, bce_recon_mean
+from utils.objectives import kl_divergence
 
 class VectorQuantizer(nn.Module):
     """
@@ -110,14 +112,22 @@ class VQVAE(nn.Module):
 
         recon_obj = None
         if "mse_sum" in objs:
-            recon_obj = mse_recon_sum
+            recon_obj = mse_recon_batch_mean
         elif "mse_mean" in objs:
             recon_obj = mse_recon_mean
+        elif "bce_batch_mean" in objs:
+            recon_obj = bce_recon_batch_mean
+            output_activation = "sigmoid"
+        elif "bce_mean" in objs:
+            recon_obj = bce_recon_mean
+            output_activation = "sigmoid"
         else:
             raise ValueError(f"Reconstruction objective {objs} not supported")
         self.recon_obj = recon_obj
 
         self.objectives = {"reconstruction_loss": recon_obj, "commitment_loss": None, "embedding_loss": None}
+
+        self.features = ["encoding"]
 
         modules = []
         
@@ -246,7 +256,13 @@ class VQVAE(nn.Module):
     def forward(self, input: Tensor, **kwargs) -> Dict[str, Any]:
         encoding = self.encode(input)
         quantized_inputs, commitment_loss, embedding_loss = self.vq_layer(encoding)
-        return {"recons": self.decode(quantized_inputs), "quantized_inputs": quantized_inputs, "commitment_loss": commitment_loss, "embedding_loss": embedding_loss}
+        return {
+            "recons": self.decode(quantized_inputs),
+            "quantized_inputs": quantized_inputs,
+            "encoding": encoding,
+            "commitment_loss": commitment_loss,
+            "embedding_loss": embedding_loss,
+        }
     
     def loss_function(self, inputs, args: dict) -> dict:
         """
@@ -324,4 +340,8 @@ class VQVAE(nn.Module):
         """
         Prints the model summary
         """
-        return summary(self, (self.in_channels, self.input_size, self.input_size))
+        try:
+            return summary(self, (self.in_channels, self.input_size, self.input_size))
+        except Exception as e:
+            print(f"Error printing model summary: {e}")
+            return None

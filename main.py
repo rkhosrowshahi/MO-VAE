@@ -8,7 +8,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from torchjd import backward, mtl_backward
+from torchjd.autojac import backward, mtl_backward
 from torchjd.aggregation import (
     UPGrad,
     PCGrad,
@@ -19,6 +19,7 @@ from torchjd.aggregation import (
     MGDA,
     CAGrad,
     DualProj,
+    Sum
 )
 import wandb
 from pymoo.indicators.hv import HV
@@ -30,6 +31,34 @@ from utils.utils import AverageMeter, get_dataset, set_seed
 from models import get_network
 
 plt.style.use(["science", "ieee", "no-latex"])
+
+# Global step tracker for wandb logging in hooks
+_current_step = 0
+
+
+def print_weights(_, __, weights: torch.Tensor) -> None:
+    """Prints the extracted weights."""
+    global _current_step
+    # print(f"Weights: {weights}")
+    if wandb.run is not None:
+        log_dict = {f"train/task_{i}_weight": weight.item() for i, weight in enumerate(weights)}
+        wandb.log(log_dict, step=_current_step)
+
+
+def print_gd_similarity(_, inputs: tuple[torch.Tensor, ...], weights: torch.Tensor) -> None:
+    """Prints the cosine similarity between the weighted aggregation and the average gradient."""
+    global _current_step
+    matrix = inputs[0]
+    # Compute mean gradient (simple average across tasks)
+    gd_output = matrix.mean(dim=0)
+    # Compute weighted aggregated gradient
+    # matrix shape: [num_tasks, num_params], weights shape: [num_tasks]
+    weighted_grad = (matrix.T @ weights)  # Shape: [num_params]
+    similarity = torch.nn.functional.cosine_similarity(weighted_grad, gd_output, dim=0)
+    similarity_value = similarity.item()
+    # print(f"Cosine similarity: {similarity_value:.4f}")
+    if wandb.run is not None:
+        wandb.log({"train/gradient_similarity": similarity_value}, step=_current_step)
 
 
 def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
@@ -45,14 +74,72 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
         loss_dict = net.loss_function(images, args=outputs)
         total_loss = sum(loss_dict.values())
 
-        if aggregator is None or aggregator == "none":
+        # Verify decoder gradients match between mtl_backward and standard backward
+        # This ensures that KLD (which doesn't use decoder) doesn't affect decoder gradients via MTL
+        # if step == 0 and aggregator is not None and aggregator != "sum":
+        #     features_check = None
+        #     if "mu" in outputs and "log_var" in outputs:
+        #         features_check = [outputs["mu"], outputs["log_var"]]
+        #     elif "encoding" in outputs:
+        #         features_check = [outputs["encoding"]]
+
+        #     if features_check is not None:
+        #         print("Verifying decoder gradients integrity...")
+                
+        #         # 1. Compute gradients with standard sum backward
+        #         optimizer.zero_grad()
+        #         total_loss.backward(retain_graph=True)
+                
+        #         decoder_grads = {}
+        #         decoder_net = net.module.decoder if hasattr(net, "module") else net.decoder
+        #         for name, param in decoder_net.named_parameters():
+        #             if param.grad is not None:
+        #                 decoder_grads[name] = param.grad.clone()
+
+        #         # 2. Compute gradients with mtl_backward
+        #         optimizer.zero_grad()
+        #         mtl_backward(
+        #             losses=list(loss_dict.values()),
+        #             features=features_check,
+        #             aggregator=aggregator,
+        #             retain_graph=True 
+        #         )
+
+        #         # 3. Compare gradients
+        #         max_diff = 0.0
+        #         for name, param in decoder_net.named_parameters():
+        #             if name in decoder_grads:
+        #                 grad_sum = decoder_grads[name]
+        #                 grad_mtl = param.grad
+        #                 if grad_mtl is not None and grad_sum is not None:
+        #                     diff = (grad_mtl - grad_sum).abs().max().item()
+        #                     max_diff = max(max_diff, diff)
+                
+        #         print(f"Max decoder gradient difference: {max_diff:.6e}")
+        #         if max_diff < 1e-5:
+        #             print("Gradient Check Passed: Decoder gradients are consistent.")
+        #         else:
+        #             print("Gradient Check Failed: Decoder gradients differ!")
+                
+        #         optimizer.zero_grad()
+
+        # Update global step for hooks before backward
+        global _current_step
+        _current_step = step + 1
+        
+        if aggregator is None or aggregator == "sum":
             total_loss.backward()
         else:
             features = None
-            if "mu" in outputs and "log_var" in outputs:
-                features = [outputs["mu"], outputs["log_var"]]
+            if net.features is not None:
+                features = [outputs[feature] for feature in net.features]
+            
             if features is not None:
-                mtl_backward(loss_dict.values(), features=features, aggregator=aggregator)
+                mtl_backward(
+                    losses=list(loss_dict.values()),
+                    features=features,
+                    aggregator=aggregator,
+                )
             else:
                 backward(loss_dict.values(), aggregator=aggregator)
 
@@ -75,7 +162,7 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
     return loss_meters, step
 
 
-def eval_epoch(net, data_loader, device, args):
+def evaluate(net, data_loader, device, args):
     net.eval()
     loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
     loss_meters["total_loss"] = AverageMeter()
@@ -220,6 +307,8 @@ def main(args):
 
     net = get_network(input_size, num_channels=3, args=args).to(device)
     args.total_params = net.total_trainable_params()
+    if hasattr(net, "print_model_summary"):
+        print(net.print_model_summary())
 
     if args.optimizer == "sgd":
         optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.wd)
@@ -257,17 +346,23 @@ def main(args):
         elif agg_name == "mgda":
             aggregator = MGDA()
         elif agg_name == "cagrad":
-            aggregator = CAGrad()
+            aggregator = CAGrad(c=1.0)
         elif agg_name == "nashmtl":
-            aggregator = NashMTL()
+            aggregator = NashMTL(n_tasks=len(net.objectives))
         elif agg_name == "dualproj":
             aggregator = DualProj()
-        elif agg_name == "none":
-            aggregator = "none"
+        elif agg_name == "jd_sum":
+            aggregator = Sum()
+        elif agg_name == "sum":
+            aggregator = "sum"
         else:
             raise ValueError(f"Aggregator {args.aggregator} not supported")
     else:
-        args.aggregator = "none"
+        args.aggregator = "sum"
+
+    if aggregator is not None and aggregator != "sum":
+        aggregator.weighting.register_forward_hook(print_weights)
+        aggregator.weighting.register_forward_hook(print_gd_similarity)
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     save_root = os.path.join(args.save_path, args.dataset, args.arch, args.optimizer, args.aggregator, timestamp)
@@ -285,7 +380,7 @@ def main(args):
             tags=args.wandb_tags if args.wandb_tags else None,
         )
 
-    eval_loss_meters = eval_epoch(net, train_loader, device=device, args=args)
+    eval_loss_meters = evaluate(net, train_loader, device=device, args=args)
     print(
         "Initial random loss: "
         + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
@@ -305,7 +400,7 @@ def main(args):
             device=device,
             args=args,
         )
-        eval_loss_meters = eval_epoch(net, test_loader, device=device, args=args)
+        eval_loss_meters = evaluate(net, test_loader, device=device, args=args)
 
         if (epoch % args.save_freq == 0) or epoch in {1, args.epochs}:
             gen_path = os.path.join(save_root, "figures", "generated", f"epoch_{epoch:03d}_random_samples.pdf")
@@ -413,7 +508,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_activation", type=str, default="tanh")
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
-    parser.add_argument("--objs", type=str, nargs="+", default=["mse_sum", "kl_sum"])
+    parser.add_argument("--objs", type=str, nargs="+", default=["mse_mean", "kld"])
+    parser.add_argument("--kld_weight", type=float, default=0.00025)
     parser.add_argument("--optimizer", type=str, default="adam")
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--lr", type=float, default=0.001)

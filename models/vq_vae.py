@@ -7,7 +7,7 @@ from torch import Tensor
 from torchsummary import summary
 
 from utils.objectives import mse_recon_batch_mean, mse_recon_mean
-from utils.objectives import bce_recon_batch_mean, bce_recon_mean
+from utils.objectives import bce_with_logits_recon_batch_mean, bce_with_logits_recon_mean
 from utils.objectives import kl_divergence
 
 class VectorQuantizer(nn.Module):
@@ -120,14 +120,16 @@ class VQVAE(nn.Module):
         recon_obj = None
         if "mse_sum" in objs:
             recon_obj = mse_recon_batch_mean
+            output_activation = "tanh"
         elif "mse_mean" in objs:
             recon_obj = mse_recon_mean
+            output_activation = "tanh"
         elif "bce_batch_mean" in objs:
-            recon_obj = bce_recon_batch_mean
-            output_activation = "sigmoid"
+            recon_obj = bce_with_logits_recon_batch_mean
+            output_activation = "none"
         elif "bce_mean" in objs:
-            recon_obj = bce_recon_mean
-            output_activation = "sigmoid"
+            recon_obj = bce_with_logits_recon_mean
+            output_activation = "none"
         else:
             raise ValueError(f"Reconstruction objective {objs} not supported")
         self.recon_obj = recon_obj

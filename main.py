@@ -68,11 +68,14 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
 
     for images, _ in train_loader:
         images = images.to(device)
+
         optimizer.zero_grad()
 
         outputs = net(images)
         loss_dict = net.loss_function(images, args=outputs)
         total_loss = sum(loss_dict.values())
+
+        print(f"Total loss: {total_loss.item():.6e}")
 
         # Verify decoder gradients match between mtl_backward and standard backward
         # This ensures that KLD (which doesn't use decoder) doesn't affect decoder gradients via MTL
@@ -142,6 +145,10 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
                 )
             else:
                 backward(loss_dict.values(), aggregator=aggregator)
+
+        # Clip gradients to prevent numerical instabilities
+        if args.max_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=args.max_grad_norm)
 
         optimizer.step()
 
@@ -382,13 +389,13 @@ def main(args):
             tags=args.wandb_tags if args.wandb_tags else None,
         )
 
-    eval_loss_meters = evaluate(net, train_loader, device=device, args=args)
-    print(
-        "Initial random loss: "
-        + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
-    )
+    # eval_loss_meters = evaluate(net, train_loader, device=device, args=args)
+    # print(
+    #     "Initial random loss: "
+    #     + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
+    # )
 
-    objective_keys = [key for key in eval_loss_meters.keys() if key != "total_loss"]
+    objective_keys = net.objectives.keys()
     hv_indicator = build_hv_indicator(objective_keys, args)
 
     step = 0
@@ -515,6 +522,7 @@ if __name__ == "__main__":
     parser.add_argument("--kld_weight", type=float, default=0.00025)
     parser.add_argument("--optimizer", type=str, default="adam")
     parser.add_argument("--momentum", type=float, default=0.9)
+    parser.add_argument("--max_grad_norm", type=float, default=None)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--wd", "--weight_decay", type=float, default=5e-4)
     parser.add_argument("--scheduler", type=str, default=None)

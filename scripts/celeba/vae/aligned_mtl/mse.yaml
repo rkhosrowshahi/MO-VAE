@@ -31,9 +31,9 @@ hv_ref_recon: 1.1
 hv_ref_kl: 1.1
 
 # Wandb settings (optional)
-use_wandb: false
+use_wandb: true
 wandb_project: mo-vae
-wandb_entity: rasa_thesis
+wandb_entity: rasa_research
 wandb_name: "celeba 128d mse+kld aligned_mtl"
 
 

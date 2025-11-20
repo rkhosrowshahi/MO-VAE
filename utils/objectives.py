@@ -25,6 +25,15 @@ def bce_recon_mean(inputs, recons):
     loss = F.binary_cross_entropy(recons, inputs, reduction='mean')
     return loss
 
+def bce_with_logits_recon_batch_mean(inputs, recons):
+    loss = F.binary_cross_entropy_with_logits(recons, inputs, reduction='sum') / inputs.size(0)
+    return loss
+
+# Binary cross entropy loss with mean reduction
+def bce_with_logits_recon_mean(inputs, recons):
+    loss = F.binary_cross_entropy_with_logits(recons, inputs, reduction='mean')
+    return loss
+
 # KL divergence loss (mean over batch)
 # Formula: D_KL(q(z|x) || p(z)) = -0.5 * sum(1 + log_var - mu^2 - exp(log_var))
 # where q(z|x) ~ N(mu, exp(log_var)) and p(z) ~ N(0, I)

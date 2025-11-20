@@ -1,0 +1,38 @@
+# CelebA VAE Configuration - CAGrad Aggregator
+# This configuration trains a VAE on CelebA dataset with MSE mean and KL objectives
+
+dataset: CelebA
+arch: vae
+epochs: 10
+batch_size: 128
+optimizer: adam
+lr: 0.001
+wd: 0.0001
+aggregator: cagrad
+normalize: true
+
+# Model architecture
+latent_dim: 128
+hidden_dims: [32, 64, 128, 256, 512]
+objs: [mse_mean, kld]
+kld_weight: 2.5e-4
+output_activation: tanh
+
+# Training settings
+seed: 42
+device: cuda:0
+save_path: logs/
+save_freq: 10
+num_samples: 64
+
+# Hypervolume reference points
+hv_ref_recon: 1.1
+hv_ref_kl: 1.1
+
+# Wandb settings (optional)
+use_wandb: false
+wandb_project: mo-vae
+wandb_entity: rasa_thesis
+wandb_name: "celeba 128d mse+kld CAGrad"
+
+

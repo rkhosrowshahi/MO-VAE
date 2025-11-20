@@ -63,27 +63,14 @@ def yaml_to_args(config):
     return args
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Run main.py with YAML configuration file',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        '--f',
-        dest='config_file',
-        type=str,
-        required=True,
-        help='Path to YAML configuration file'
-    )
-    
-    args = parser.parse_args()
-    
+def run_single_config(config_file):
+    """Run a single YAML configuration file."""
     # Load YAML config
     try:
-        config = load_yaml_config(args.config_file)
+        config = load_yaml_config(config_file)
     except Exception as e:
-        print(f"Error loading configuration file: {e}", file=sys.stderr)
-        sys.exit(1)
+        print(f"Error loading configuration file {config_file}: {e}", file=sys.stderr)
+        return False
     
     # Convert to command-line arguments
     cmd_args = yaml_to_args(config)
@@ -92,19 +79,102 @@ def main():
     cmd = [sys.executable, 'main.py'] + cmd_args
     
     # Print command for transparency
+    print(f"\n{'=' * 80}", flush=True)
     print(f"Running: {' '.join(cmd)}", flush=True)
-    print("-" * 80, flush=True)
+    print(f"{'=' * 80}\n", flush=True)
     
     # Run main.py
     try:
         result = subprocess.run(cmd, check=True)
-        sys.exit(result.returncode)
+        return result.returncode == 0
     except subprocess.CalledProcessError as e:
-        print(f"Error running main.py: {e}", file=sys.stderr)
-        sys.exit(e.returncode)
+        print(f"Error running main.py with {config_file}: {e}", file=sys.stderr)
+        return False
     except KeyboardInterrupt:
-        print("\nInterrupted by user", file=sys.stderr)
-        sys.exit(130)
+        print(f"\nInterrupted by user while running {config_file}", file=sys.stderr)
+        return False
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Run main.py with YAML configuration file(s)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run a single YAML file
+  python runner.py --f scripts/cifar100/aligned_mtl/mse.yaml
+  
+  # Run multiple YAML files
+  python runner.py --f file1.yaml --f file2.yaml --f file3.yaml
+  
+  # Run from a file list (one path per line)
+  python runner.py --file-list configs.txt
+        """
+    )
+    parser.add_argument(
+        '--f',
+        dest='config_files',
+        type=str,
+        action='append',
+        help='Path to YAML configuration file (can be specified multiple times)'
+    )
+    parser.add_argument(
+        '--file-list',
+        dest='file_list',
+        type=str,
+        help='Path to a text file containing YAML file paths (one per line)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Collect all config files to run
+    config_files = []
+    
+    # Add files from --f arguments
+    if args.config_files:
+        config_files.extend(args.config_files)
+    
+    # Add files from --file-list
+    if args.file_list:
+        file_list_path = Path(args.file_list)
+        if not file_list_path.exists():
+            print(f"Error: File list not found: {file_list_path}", file=sys.stderr)
+            sys.exit(1)
+        
+        with open(file_list_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):  # Skip empty lines and comments
+                    config_files.append(line)
+    
+    # Validate that at least one config file is provided
+    if not config_files:
+        parser.error("At least one configuration file must be provided via --f or --file-list")
+    
+    # Run each configuration file
+    print(f"Found {len(config_files)} configuration file(s) to run:\n")
+    for i, config_file in enumerate(config_files, 1):
+        print(f"  {i}. {config_file}")
+    print()
+    
+    failed_files = []
+    for i, config_file in enumerate(config_files, 1):
+        print(f"\n[{i}/{len(config_files)}] Processing: {config_file}")
+        success = run_single_config(config_file)
+        if not success:
+            failed_files.append(config_file)
+    
+    # Summary
+    print(f"\n{'=' * 80}")
+    print(f"Summary: {len(config_files) - len(failed_files)}/{len(config_files)} configuration(s) completed successfully")
+    if failed_files:
+        print(f"Failed files:")
+        for failed_file in failed_files:
+            print(f"  - {failed_file}")
+        sys.exit(1)
+    else:
+        print("All configurations completed successfully!")
+        sys.exit(0)
 
 
 if __name__ == '__main__':

@@ -2,8 +2,6 @@ import numpy as np
 import torch
 from torchvision import datasets, transforms
 
-from models import VAE, VQVAE
-
 def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -26,6 +24,17 @@ class AverageMeter:
         self.avg = self.sum / self.count
     def __str__(self):
         return f"{self.avg:.4f}"
+
+class MyCelebA(datasets.CelebA):
+    """
+    A work-around to address issues with pytorch's celebA dataset class.
+    
+    Download and Extract
+    URL : https://drive.google.com/file/d/1m8-EBPgi5MRubrm6iQjafK2QMHDBMSfJ/view?usp=sharing
+    """
+    
+    def _check_integrity(self) -> bool:
+        return True
 
 
 def get_dataset(dataset_name, normalize=False):
@@ -114,6 +123,32 @@ def get_dataset(dataset_name, normalize=False):
         )
         num_classes = 1000
         class_names = [f'class {i}' for i in range(1000)]
+    elif dataset_name.lower() == "celeba":
+        input_size = 64
+        train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
+                                              transforms.CenterCrop(148),
+                                              transforms.Resize(input_size),
+                                              transforms.ToTensor(),])
+        
+        val_transforms = transforms.Compose([
+                                            transforms.CenterCrop(148),
+                                            transforms.Resize(input_size),
+                                            transforms.ToTensor(),])
+        
+        train_dataset = MyCelebA(
+            './data',
+            split='train',
+            transform=train_transforms,
+            download=False,
+        )
+        
+        # Replace CelebA with your dataset
+        test_dataset = MyCelebA(
+            './data',
+            split='test',
+            transform=val_transforms,
+            download=False,
+        )
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 

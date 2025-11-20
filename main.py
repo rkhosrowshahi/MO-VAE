@@ -305,6 +305,8 @@ def main(args):
         drop_last=False,
     )
 
+    args.dataset_size = len(train_dataset)
+
     net = get_network(input_size, num_channels=3, args=args).to(device)
     args.total_params = net.total_trainable_params()
     if hasattr(net, "print_model_summary"):
@@ -522,6 +524,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_embeddings", type=int, default=512)
     parser.add_argument("--alpha", type=float, default=1.0)
     parser.add_argument("--beta", type=float, default=1.0)
+    parser.add_argument("--gamma", type=float, default=1.0)
+    parser.add_argument("--anneal_steps", type=int, default=200)
     parser.add_argument("--hv_ref_recon", type=float, default=None)
     parser.add_argument("--hv_ref_kl", type=float, default=None)
     parser.add_argument("--num_samples", type=int, default=64)

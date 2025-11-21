@@ -334,8 +334,6 @@ def main(args):
 
     net = get_network(input_size, num_channels=3, args=args).to(device)
     args.total_params = net.total_trainable_params()
-    if hasattr(net, "print_model_summary"):
-        print(net.print_model_summary())
 
     if args.optimizer == "sgd":
         optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.wd)
@@ -412,6 +410,9 @@ def main(args):
     #     "Initial random loss: "
     #     + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
     # )
+
+    if hasattr(net, "print_model_summary"):
+        print(net.print_model_summary())
 
     objective_keys = net.objectives.keys()
     hv_indicator = build_hv_indicator(objective_keys, args)

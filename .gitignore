@@ -9,3 +9,4 @@ __pycache__
 archive/
 pyrightconfig.json
 logs/
+examples/

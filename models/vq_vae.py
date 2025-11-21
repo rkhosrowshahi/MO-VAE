@@ -328,12 +328,52 @@ class VQVAE(nn.Module):
             "embedding_loss": embedding_loss,
         }
 
+    def get_code_indices(self, input: Tensor) -> Tensor:
+        """
+        Extract discrete code indices from input.
+        Used for training PixelCNN prior.
+        
+        Args:
+            input: [B, C, H, W] input images
+        
+        Returns:
+            Tensor of discrete code indices [B, H_latent, W_latent]
+        """
+        self.eval()
+        with torch.no_grad():
+            # Encode
+            encoding = self.encode(input)
+            
+            # Get code indices
+            encoding_perm = encoding.permute(0, 2, 3, 1).contiguous()
+            flat_encoding = encoding_perm.view(-1, self.embedding_dim)
+            
+            # Compute distances to codebook
+            dist = torch.sum(flat_encoding ** 2, dim=1, keepdim=True) + \
+                   torch.sum(self.vq_layer.embedding.weight ** 2, dim=1) - \
+                   2 * torch.matmul(flat_encoding, self.vq_layer.embedding.weight.t())
+            indices = torch.argmin(dist, dim=1)
+            
+            # Reshape to spatial dimensions
+            B = input.size(0)
+            indices = indices.view(B, self.latent_spatial_dim, self.latent_spatial_dim)
+            
+        return indices
+
     def sample(self, num_samples=1, device=None):
         """
         Sample from the latent space and generate images.
         
         For VQ-VAE, we randomly select indices from the codebook and 
         decode the corresponding embeddings.
+        
+        For proper sampling with learned prior, use:
+            from models.pixelcnn_prior import PixelCNN
+            prior = PixelCNN(...)
+            # Sample codes from prior
+            z = prior.sample(num_samples, height, width, device)
+            # Convert to embeddings and decode
+            ...
         
         Args:
             num_samples: Number of samples to generate

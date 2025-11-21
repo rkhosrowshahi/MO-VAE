@@ -1,5 +1,5 @@
-# CelebA VAE Configuration - AlignedMTL Aggregator
-# This configuration trains a VAE on CelebA dataset with MSE mean and KL objectives
+# CELEBA VAE Configuration - Aligned MTL Aggregator (MSE+KLD)
+# This configuration trains a VAE on CELEBA dataset with MSE and KL objectives
 
 dataset: CelebA
 arch: vae
@@ -14,9 +14,10 @@ normalize: true
 # Model architecture
 latent_dim: 128
 hidden_dims: [32, 64, 128, 256, 512]
-objs: [mse_mean, kld]
-kld_weight: 2.5e-4
+kld_weight: 0.00025
 output_activation: tanh
+recons_dist: gaussian
+recons_reduction: mean
 
 # Training settings
 seed: 42
@@ -34,5 +35,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: "celeba 128d mse+kld aligned_mtl"
-
 

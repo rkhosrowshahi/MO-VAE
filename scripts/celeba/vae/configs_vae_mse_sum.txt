@@ -1,0 +1,11 @@
+scripts/celeba/vae/aligned_mtl/mse_sum.yaml
+scripts/celeba/vae/cagrad/mse_sum.yaml
+scripts/celeba/vae/dualproj/mse_sum.yaml
+scripts/celeba/vae/imtlg/mse_sum.yaml
+scripts/celeba/vae/jd_sum/mse_sum.yaml
+scripts/celeba/vae/mgda/mse_sum.yaml
+scripts/celeba/vae/nashmtl/mse_sum.yaml
+scripts/celeba/vae/pcgrad/mse_sum.yaml
+scripts/celeba/vae/sum/mse_sum.yaml
+scripts/celeba/vae/upgrad/mse_sum.yaml
+

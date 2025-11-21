@@ -1,5 +1,5 @@
-# CIFAR100 VAE Configuration - AlignedMTL Aggregator
-# This configuration trains a VAE on CIFAR100 dataset with MSE mean and KL objectives
+# CIFAR100 VAE Configuration - Aligned MTL Aggregator (MSE+KLD)
+# This configuration trains a VAE on CIFAR100 dataset with MSE and KL objectives
 
 dataset: cifar100
 arch: vae
@@ -14,9 +14,10 @@ normalize: false
 # Model architecture
 latent_dim: 128
 hidden_dims: [32, 64, 128, 256]
-objs: [mse_mean, kld]
-kld_weight: 2.5e-4
+kld_weight: 0.00025
 output_activation: sigmoid
+recons_dist: gaussian
+recons_reduction: mean
 
 # Training settings
 seed: 42
@@ -25,7 +26,7 @@ save_path: logs/
 save_freq: 10
 num_samples: 64
 
-# Hypervolume reference points (VAE has 2 objectives: reconstruction_loss, kl_loss)
+# Hypervolume reference points
 hv_ref: [1.1, 1.1]
 
 # Wandb settings (optional)
@@ -33,5 +34,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: "cifar100 128d mse+kld sigmoid aligned_mtl"
-
 

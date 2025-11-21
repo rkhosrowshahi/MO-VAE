@@ -6,9 +6,9 @@ import torch.nn.functional as F
 from torch import Tensor
 from torchsummary import summary
 
-from utils.objectives import mse_recon_batch_mean, mse_recon_mean
-from utils.objectives import bce_with_logits_recon_batch_mean, bce_with_logits_recon_mean
-from utils.objectives import laplacian_recon_batch_mean, laplacian_recon_mean
+from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled
+from utils.objectives import bce_with_logits_per_image_sum, bce_with_logits_per_pixel_mean
+from utils.objectives import laplacian_per_image_sum, laplacian_per_pixel_mean
 from models.vq_vae import VectorQuantizer, ResidualLayer
 
 
@@ -27,6 +27,7 @@ class VQVAE2(nn.Module):
                  layer_norm: str = "none",
                  output_activation: str = "tanh",
                  recons_dist: str = "gaussian",
+                 recons_reduction: str = "mean",
                  **kwargs) -> None:
         super(VQVAE2, self).__init__()
 
@@ -40,16 +41,33 @@ class VQVAE2(nn.Module):
         # Set up reconstruction objective
         recon_obj = None
         if recons_dist == "gaussian":
-            recon_obj = mse_recon_mean
+            if recons_reduction == "mean":
+                recon_obj = mse_per_pixel_mean
+            elif recons_reduction == "sum":
+                recon_obj = mse_per_image_sum
+            elif recons_reduction == "scaled_sum":
+                recon_obj = mse_total_batch_sum_scaled
+            else:
+                raise ValueError(f"MSE reduction {recons_reduction} not supported. Choose from: mean, sum, scaled_sum")
             if output_activation == "tanh":
                 pass  # Keep tanh
             else:
                 output_activation = "tanh"  # Default to tanh for gaussian
         elif recons_dist == "bernoulli":
-            recon_obj = bce_with_logits_recon_mean
+            if recons_reduction == "mean":
+                recon_obj = bce_with_logits_per_pixel_mean
+            elif recons_reduction == "sum":
+                recon_obj = bce_with_logits_per_image_sum
+            else:
+                 raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
             output_activation = "none"
         elif recons_dist == "laplacian":
-            recon_obj = laplacian_recon_mean
+            if recons_reduction == "mean":
+                recon_obj = laplacian_per_pixel_mean
+            elif recons_reduction == "sum":
+                recon_obj = laplacian_per_image_sum
+            else:
+                 raise ValueError(f"Laplacian reduction {recons_reduction} not supported. Choose from: mean, sum")
             if output_activation == "tanh":
                 pass  # Keep tanh
             else:

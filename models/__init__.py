@@ -10,6 +10,7 @@ def get_network(input_size, num_channels=3, args=None):
     num_embeddings = getattr(args, "num_embeddings", 512)
     hidden_dims = getattr(args, "hidden_dims", [32, 64, 128, 256, 512])
     recons_dist = getattr(args, "recons_dist", "gaussian")
+    recons_reduction = getattr(args, "recons_reduction", "mean")
     kld_weight = getattr(args, "kld_weight", 0.00025)
     beta = getattr(args, "beta", 1.0)
     alpha = getattr(args, "alpha", 1.0)
@@ -21,11 +22,11 @@ def get_network(input_size, num_channels=3, args=None):
     output_activation = getattr(args, 'output_activation', 'tanh')
 
     if arch.lower() == 'vae':
-        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, kld_weight=kld_weight, beta=beta)
+        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, kld_weight=kld_weight, beta=beta)
     elif arch.lower() == 'vq_vae':
-        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, beta=beta)
+        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta)
     elif arch.lower() == 'vq_vae2':
-        return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, beta=beta)
+        return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta)
     elif arch.lower() == 'betatc_vae' or arch.lower() == 'btc_vae':
         return BetaTCVAE(
             in_channels=num_channels,
@@ -38,7 +39,8 @@ def get_network(input_size, num_channels=3, args=None):
             input_size=input_size,
             dataset_size=dataset_size,
             output_activation=output_activation,
-            recons_dist=recons_dist
+            recons_dist=recons_dist,
+            recons_reduction=recons_reduction
         )
     else:
         raise ValueError(f"Network architecture {arch} not supported")

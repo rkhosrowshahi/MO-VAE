@@ -537,6 +537,8 @@ if __name__ == "__main__":
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
     parser.add_argument("--recons_dist", type=str, default="gaussian", choices=["bernoulli", "gaussian", "laplacian"], help="Reconstruction distribution: bernoulli (BCE), gaussian (MSE), or laplacian (L1)")
+    parser.add_argument("--recons_reduction", type=str, default="mean", choices=["mean", "sum", "scaled_sum"], help="Loss reduction type: mean (per_pixel_mean), sum (per_image_sum), scaled_sum (total_batch_sum_scaled - MSE only)")
+    parser.add_argument("--recons_weight", type=float, default=1.0)
     parser.add_argument("--kld_weight", type=float, default=0.00025)
     parser.add_argument("--optimizer", type=str, default="adam")
     parser.add_argument("--momentum", type=float, default=0.9)

@@ -1,6 +1,5 @@
-# CelebA BetaTC-VAE Configuration - AlignedMTL Aggregator
-# This configuration trains a BetaTC-VAE on CelebA dataset with MSE reconstruction
-# BetaTC-VAE decomposes ELBO into: reconstruction_loss, mi_loss, tc_loss, kld
+# CELEBA BetaTC-VAE Configuration - Aligned MTL Aggregator
+# This configuration trains a BetaTC-VAE on CELEBA dataset
 
 dataset: CelebA
 arch: betatc_vae
@@ -15,12 +14,13 @@ normalize: true
 # Model architecture
 latent_dim: 128
 hidden_dims: [32, 32, 64, 64]
-output_activation: tanh
-# BetaTC-VAE specific parameters
-alpha: 1.0
 beta: 6.0
+alpha: 1.0
 gamma: 1.0
 anneal_steps: 10000
+output_activation: tanh
+recons_dist: gaussian
+recons_reduction: mean
 
 # Training settings
 seed: 42
@@ -30,7 +30,7 @@ save_path: logs/
 save_freq: 2
 num_samples: 64
 
-# Hypervolume reference points (BetaTC-VAE has 4 objectives)
+# Hypervolume reference points
 hv_ref: [1.1, 1.1, 1.1, 1.1]
 
 # Wandb settings (optional)

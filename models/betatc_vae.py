@@ -5,7 +5,7 @@ from torchsummary import summary
 import math
 from typing import List, Callable, Union, Any, TypeVar, Tuple
 
-from utils.objectives import mse_recon_batch_mean, mse_recon_mean, bce_recon_batch_mean, bce_recon_mean, laplacian_recon_batch_mean, laplacian_recon_mean
+from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled, bce_per_image_sum, bce_per_pixel_mean, laplacian_per_image_sum, laplacian_per_pixel_mean
 Tensor = TypeVar('torch.tensor')
 
 
@@ -25,22 +25,41 @@ class BetaTCVAE(nn.Module):
         dataset_size: int = None,
         output_activation: str = "tanh",
         recons_dist: str = "gaussian",
+        recons_reduction: str = "mean",
         **kwargs
     ) -> None:
         super(BetaTCVAE, self).__init__()
 
         recon_obj = None
         if recons_dist == "gaussian":
-            recon_obj = mse_recon_mean
+            if recons_reduction == "mean":
+                recon_obj = mse_per_pixel_mean
+            elif recons_reduction == "sum":
+                recon_obj = mse_per_image_sum
+            elif recons_reduction == "scaled_sum":
+                recon_obj = mse_total_batch_sum_scaled
+            else:
+                raise ValueError(f"MSE reduction {recons_reduction} not supported. Choose from: mean, sum, scaled_sum")
+
             if output_activation == "tanh":
                 pass  # Keep tanh
             else:
                 output_activation = "tanh"  # Default to tanh for gaussian
         elif recons_dist == "bernoulli":
-            recon_obj = bce_recon_mean
+            if recons_reduction == "mean":
+                recon_obj = bce_per_pixel_mean
+            elif recons_reduction == "sum":
+                recon_obj = bce_per_image_sum
+            else:
+                 raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
             output_activation = "sigmoid"
         elif recons_dist == "laplacian":
-            recon_obj = laplacian_recon_mean
+            if recons_reduction == "mean":
+                recon_obj = laplacian_per_pixel_mean
+            elif recons_reduction == "sum":
+                recon_obj = laplacian_per_image_sum
+            else:
+                 raise ValueError(f"Laplacian reduction {recons_reduction} not supported. Choose from: mean, sum")
             if output_activation == "tanh":
                 pass  # Keep tanh
             else:

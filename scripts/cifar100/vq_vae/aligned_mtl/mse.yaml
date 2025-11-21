@@ -1,5 +1,5 @@
-# CIFAR100 VQ-VAE Configuration - AlignedMTL Aggregator
-# This configuration trains a VQ-VAE on CIFAR100 dataset with MSE mean objective
+# CIFAR100 VQ-VAE Configuration - Aligned MTL Aggregator (MSE)
+# This configuration trains a VQ-VAE on CIFAR100 dataset with MSE objectives
 
 dataset: cifar100
 arch: vq_vae
@@ -15,9 +15,10 @@ normalize: true
 embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
-objs: [mse_mean]
 beta: 0.25
 output_activation: tanh
+recons_dist: gaussian
+recons_reduction: mean
 
 # Training settings
 seed: 42
@@ -34,5 +35,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: "cifar100 vq_vae mse aligned_mtl"
-
 

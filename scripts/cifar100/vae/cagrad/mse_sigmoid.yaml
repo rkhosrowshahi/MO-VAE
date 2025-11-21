@@ -1,5 +1,5 @@
-# CIFAR100 VAE Configuration - CAGrad Aggregator
-# This configuration trains a VAE on CIFAR100 dataset with MSE mean and KL objectives
+# CIFAR100 VAE Configuration - CAGrad Aggregator (MSE+KLD)
+# This configuration trains a VAE on CIFAR100 dataset with MSE and KL objectives
 
 dataset: cifar100
 arch: vae
@@ -14,9 +14,10 @@ normalize: false
 # Model architecture
 latent_dim: 128
 hidden_dims: [32, 64, 128, 256]
-objs: [mse_mean, kld]
-kld_weight: 2.5e-4
+kld_weight: 0.00025
 output_activation: sigmoid
+recons_dist: gaussian
+recons_reduction: mean
 
 # Training settings
 seed: 42

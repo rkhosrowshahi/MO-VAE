@@ -3,12 +3,19 @@ from torch.nn import functional as F
 
 
 # Mean squared error loss with sum reduction
-def mse_recon_batch_mean(inputs, recons):
+# Standard VAE Loss (Sum over features, Mean over batch)
+def mse_per_image_sum(inputs, recons):
     loss = F.mse_loss(recons, inputs, reduction='sum') / inputs.size(0)
     return loss
 
+# Scaled Total Loss (Sum over features, Sum over batch, * 255)
+def mse_total_batch_sum_scaled(inputs, recons):
+    loss = F.mse_loss(recons * 255.0, inputs * 255.0, reduction='sum') / 255.0
+    return loss
+
 # Mean squared error loss with mean reduction
-def mse_recon_mean(inputs, recons):
+# Per-Pixel Loss (Mean over features, Mean over batch)
+def mse_per_pixel_mean(inputs, recons):
     loss = F.mse_loss(recons, inputs, reduction='mean')
     return loss
 
@@ -16,33 +23,33 @@ def mse_recon_mean(inputs, recons):
 # NOTE: The VAE decoder uses a sigmoid output activation when a BCE objective is selected,
 # so we use `binary_cross_entropy` (which expects probabilities) rather than
 # `binary_cross_entropy_with_logits` (which expects raw logits).
-def bce_recon_batch_mean(inputs, recons):
+def bce_per_image_sum(inputs, recons):
     loss = F.binary_cross_entropy(recons, inputs, reduction='sum') / inputs.size(0)
     return loss
 
 # Binary cross entropy loss with mean reduction
-def bce_recon_mean(inputs, recons):
+def bce_per_pixel_mean(inputs, recons):
     loss = F.binary_cross_entropy(recons, inputs, reduction='mean')
     return loss
 
-def bce_with_logits_recon_batch_mean(inputs, recons):
+def bce_with_logits_per_image_sum(inputs, recons):
     loss = F.binary_cross_entropy_with_logits(recons, inputs, reduction='sum') / inputs.size(0)
     return loss
 
 # Binary cross entropy loss with mean reduction
-def bce_with_logits_recon_mean(inputs, recons):
+def bce_with_logits_per_pixel_mean(inputs, recons):
     loss = F.binary_cross_entropy_with_logits(recons, inputs, reduction='mean')
     return loss
 
 # Laplacian loss (L1 loss) with sum reduction
 # For Laplacian distribution: p(x|z) = Laplacian(recons, scale)
 # Negative log-likelihood is proportional to L1 loss
-def laplacian_recon_batch_mean(inputs, recons):
+def laplacian_per_image_sum(inputs, recons):
     loss = F.l1_loss(recons, inputs, reduction='sum') / inputs.size(0)
     return loss
 
 # Laplacian loss (L1 loss) with mean reduction
-def laplacian_recon_mean(inputs, recons):
+def laplacian_per_pixel_mean(inputs, recons):
     loss = F.l1_loss(recons, inputs, reduction='mean')
     return loss
 

@@ -1,11 +1,11 @@
-scripts/cifar100/vq_vae/aligned_mtl/mse_sum.yaml
-scripts/cifar100/vq_vae/cagrad/mse_sum.yaml
-scripts/cifar100/vq_vae/dualproj/mse_sum.yaml
-scripts/cifar100/vq_vae/imtlg/mse_sum.yaml
-scripts/cifar100/vq_vae/jd_sum/mse_sum.yaml
-scripts/cifar100/vq_vae/mgda/mse_sum.yaml
-scripts/cifar100/vq_vae/nashmtl/mse_sum.yaml
-scripts/cifar100/vq_vae/pcgrad/mse_sum.yaml
-scripts/cifar100/vq_vae/sum/mse_sum.yaml
-scripts/cifar100/vq_vae/upgrad/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/sum/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/upgrad/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/aligned_mtl/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/dualproj/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/cagrad/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/pcgrad/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/imtlg/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/jd_sum/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/mgda/mse_sum.yaml
+scripts/cifar100/vq_vae/512k_64d/nashmtl/mse_sum.yaml
 

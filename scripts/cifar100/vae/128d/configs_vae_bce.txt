@@ -1,11 +1,11 @@
+scripts/cifar100/vae/128d/sum/bce.yaml
+scripts/cifar100/vae/128d/upgrad/bce.yaml
 scripts/cifar100/vae/128d/aligned_mtl/bce.yaml
-scripts/cifar100/vae/128d/cagrad/bce.yaml
 scripts/cifar100/vae/128d/dualproj/bce.yaml
+scripts/cifar100/vae/128d/cagrad/bce.yaml
+scripts/cifar100/vae/128d/pcgrad/bce.yaml
 scripts/cifar100/vae/128d/imtlg/bce.yaml
 scripts/cifar100/vae/128d/jd_sum/bce.yaml
 scripts/cifar100/vae/128d/mgda/bce.yaml
 scripts/cifar100/vae/128d/nashmtl/bce.yaml
-scripts/cifar100/vae/128d/pcgrad/bce.yaml
-scripts/cifar100/vae/128d/sum/bce.yaml
-scripts/cifar100/vae/128d/upgrad/bce.yaml
 

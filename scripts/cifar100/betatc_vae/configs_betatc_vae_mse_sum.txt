@@ -1,11 +1,11 @@
+scripts/cifar100/betatc_vae/sum/mse_sum.yaml
+scripts/cifar100/betatc_vae/upgrad/mse_sum.yaml
 scripts/cifar100/betatc_vae/aligned_mtl/mse_sum.yaml
-scripts/cifar100/betatc_vae/cagrad/mse_sum.yaml
 scripts/cifar100/betatc_vae/dualproj/mse_sum.yaml
+scripts/cifar100/betatc_vae/cagrad/mse_sum.yaml
+scripts/cifar100/betatc_vae/pcgrad/mse_sum.yaml
 scripts/cifar100/betatc_vae/imtlg/mse_sum.yaml
 scripts/cifar100/betatc_vae/jd_sum/mse_sum.yaml
 scripts/cifar100/betatc_vae/mgda/mse_sum.yaml
 scripts/cifar100/betatc_vae/nashmtl/mse_sum.yaml
-scripts/cifar100/betatc_vae/pcgrad/mse_sum.yaml
-scripts/cifar100/betatc_vae/sum/mse_sum.yaml
-scripts/cifar100/betatc_vae/upgrad/mse_sum.yaml
 

@@ -29,7 +29,7 @@ save_freq: 10
 num_samples: 64
 
 # Hypervolume reference points
-hv_ref: [1.1, 1.1, 1.1]
+hv_ref: [1e4, 1e4, 1e4]
 
 # Wandb settings (optional)
 use_wandb: true

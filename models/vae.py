@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torchsummary import summary
 
-from utils.objectives import mse_recon_batch_mean, mse_recon_mean, bce_recon_batch_mean, bce_recon_mean, kl_divergence
+from utils.objectives import mse_recon_batch_mean, mse_recon_mean, bce_recon_batch_mean, bce_recon_mean, laplacian_recon_batch_mean, laplacian_recon_mean, kl_divergence
 
 
 class PrintLayer(nn.Module):
@@ -26,27 +26,29 @@ class UnFlatten(nn.Module):
 
 # Define the VAE model
 class VAE(nn.Module):
-    def __init__(self, latent_dim=2, input_size=32, in_channels=3, hidden_dims=None, layer_norm="batch", output_activation="tanh", objs=["mse_sum", "kl_sum"], kld_weight=0.00025, beta=1.0):
+    def __init__(self, latent_dim=2, input_size=32, in_channels=3, hidden_dims=None, layer_norm="batch", output_activation="tanh", recons_dist="gaussian", kld_weight=0.00025, beta=1.0):
         super(VAE, self).__init__()
         
         recon_obj = None
-        kl_obj = None
-        if "mse_batch_mean" in objs:
-            recon_obj = mse_recon_batch_mean
-        elif "mse_mean" in objs:
+        kld_obj = kl_divergence
+        
+        if recons_dist == "gaussian":
             recon_obj = mse_recon_mean
-        elif "bce_batch_mean" in objs:
-            recon_obj = bce_recon_batch_mean
-            output_activation = "sigmoid"
-        elif "bce_mean" in objs:
+            if output_activation == "tanh":
+                pass  # Keep tanh
+            else:
+                output_activation = "tanh"  # Default to tanh for gaussian
+        elif recons_dist == "bernoulli":
             recon_obj = bce_recon_mean
             output_activation = "sigmoid"
+        elif recons_dist == "laplacian":
+            recon_obj = laplacian_recon_mean
+            if output_activation == "tanh":
+                pass  # Keep tanh
+            else:
+                output_activation = "tanh"  # Default to tanh for laplacian
         else:
-            raise ValueError(f"Reconstruction objective {objs} not supported")
-        if "kld" in objs:
-            kld_obj = kl_divergence
-        else:
-            raise ValueError(f"KL divergence objective {objs} not supported")
+            raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
 
         self.recon_obj = recon_obj
         self.kld_obj = kld_obj

@@ -7,7 +7,7 @@ epochs: 10
 batch_size: 128
 optimizer: adam
 lr: 0.001
-wd: 0.0001
+wd: 0.0
 aggregator: upgrad
 normalize: true
 
@@ -27,8 +27,7 @@ save_freq: 2
 num_samples: 64
 
 # Hypervolume reference points
-hv_ref_recon: 1.1
-hv_ref_kl: 1.1
+hv_ref: [1.1, 1.1]
 
 # Wandb settings (optional)
 use_wandb: true

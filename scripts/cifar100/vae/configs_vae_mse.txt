@@ -1,11 +1,11 @@
-scripts/cifar100/vae/aligned_mtl/mse.yaml
-scripts/cifar100/vae/cagrad/mse.yaml
-scripts/cifar100/vae/dualproj/mse.yaml
-scripts/cifar100/vae/imtlg/mse.yaml
-scripts/cifar100/vae/jd_sum/mse.yaml
-scripts/cifar100/vae/mgda/mse.yaml
-scripts/cifar100/vae/nashmtl/mse.yaml
-scripts/cifar100/vae/pcgrad/mse.yaml
 scripts/cifar100/vae/sum/mse.yaml
 scripts/cifar100/vae/upgrad/mse.yaml
+scripts/cifar100/vae/dualproj/mse.yaml
+scripts/cifar100/vae/aligned_mtl/mse.yaml
+scripts/cifar100/vae/imtlg/mse.yaml
+scripts/cifar100/vae/mgda/mse.yaml
+scripts/cifar100/vae/pcgrad/mse.yaml
+scripts/cifar100/vae/cagrad/mse.yaml
+scripts/cifar100/vae/nashmtl/mse.yaml
+scripts/cifar100/vae/jd_sum/mse.yaml
 

@@ -1,0 +1,40 @@
+# CIFAR100 BetaTC-VAE Configuration - IMTLG Aggregator
+# This configuration trains a BetaTC-VAE on CIFAR100 dataset with MSE reconstruction
+# BetaTC-VAE decomposes ELBO into: reconstruction_loss, mi_loss, tc_loss, kld
+
+dataset: cifar100
+arch: betatc_vae
+epochs: 100
+batch_size: 128
+optimizer: adam
+lr: 0.001
+wd: 0.0
+aggregator: imtlg
+normalize: true
+
+# Model architecture
+latent_dim: 128
+hidden_dims: [32, 32, 64, 64]
+output_activation: tanh
+# BetaTC-VAE specific parameters
+alpha: 1.0
+beta: 6.0
+gamma: 1.0
+anneal_steps: 10000
+
+# Training settings
+seed: 42
+device: cuda:0
+save_path: logs/
+save_freq: 10
+num_samples: 64
+
+# Hypervolume reference points (BetaTC-VAE has 4 objectives)
+hv_ref: [1.1, 1.1, 1.1, 1.1]
+
+# Wandb settings (optional)
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: "cifar100 128d betatc_vae IMTL-G"
+

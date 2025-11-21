@@ -4,6 +4,8 @@ from torch.nn import functional as F
 from torchsummary import summary
 import math
 from typing import List, Callable, Union, Any, TypeVar, Tuple
+
+from utils.objectives import mse_recon_batch_mean, mse_recon_mean, bce_recon_batch_mean, bce_recon_mean, laplacian_recon_batch_mean, laplacian_recon_mean
 Tensor = TypeVar('torch.tensor')
 
 
@@ -21,9 +23,30 @@ class BetaTCVAE(nn.Module):
         gamma: float = 1.0,
         input_size: int = 32,
         dataset_size: int = None,
+        output_activation: str = "tanh",
+        recons_dist: str = "gaussian",
         **kwargs
     ) -> None:
         super(BetaTCVAE, self).__init__()
+
+        recon_obj = None
+        if recons_dist == "gaussian":
+            recon_obj = mse_recon_mean
+            if output_activation == "tanh":
+                pass  # Keep tanh
+            else:
+                output_activation = "tanh"  # Default to tanh for gaussian
+        elif recons_dist == "bernoulli":
+            recon_obj = bce_recon_mean
+            output_activation = "sigmoid"
+        elif recons_dist == "laplacian":
+            recon_obj = laplacian_recon_mean
+            if output_activation == "tanh":
+                pass  # Keep tanh
+            else:
+                output_activation = "tanh"  # Default to tanh for laplacian
+        else:
+            raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
 
         self.latent_dim = latent_dim
         self.anneal_steps = anneal_steps
@@ -38,17 +61,30 @@ class BetaTCVAE(nn.Module):
         # Set up objectives dict for compatibility with training loop
         # These keys match the loss function return keys
         self.objectives = {
-            "reconstruction_loss": None,
+            "reconstruction_loss": recon_obj,
             "mi_loss": None,
             "tc_loss": None,
             "kld": None,
         }
+
+        self.features = ["mu", "log_var"]
 
         modules = []
         if hidden_dims is None:
             hidden_dims = [32, 32, 32, 32]
 
         self.hidden_dims = hidden_dims
+
+        # Setup output activation
+        self.output_activation = None
+        if output_activation == "tanh":
+            self.output_activation = nn.Tanh
+        elif output_activation == "sigmoid":
+            self.output_activation = nn.Sigmoid
+        elif output_activation == "none":
+            self.output_activation = nn.Identity
+        else:
+            raise ValueError(f"Output activation {output_activation} not supported")
 
         # Build Encoder
         encoder_in_channels = in_channels
@@ -118,7 +154,7 @@ class BetaTCVAE(nn.Module):
             nn.Conv2d(
                 hidden_dims_reversed[-1], out_channels=in_channels, kernel_size=3, padding=1
             ),
-            nn.Tanh(),
+            self.output_activation(),
         )
 
     def encode(self, input: Tensor) -> List[Tensor]:
@@ -211,7 +247,7 @@ class BetaTCVAE(nn.Module):
 
         weight = 1  # Account for the minibatch samples from the dataset
 
-        recons_loss = F.mse_loss(recons, inputs, reduction="sum")
+        recons_loss = self.objectives["reconstruction_loss"](inputs, recons)
 
         log_q_zx = self.log_density_gaussian(z, mu, log_var).sum(dim=1)
 
@@ -258,7 +294,7 @@ class BetaTCVAE(nn.Module):
         # Note: The total loss is computed as sum of all returned losses in training loop
         # So we return the individual components scaled appropriately
         return {
-            "reconstruction_loss": recons_loss / batch_size,
+            "reconstruction_loss": recons_loss,
             "mi_loss": self.alpha * mi_loss,
             "tc_loss": weight * self.beta * tc_loss,
             "kld": weight * anneal_rate * self.gamma * kld_loss,

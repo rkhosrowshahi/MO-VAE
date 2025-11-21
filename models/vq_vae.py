@@ -8,6 +8,7 @@ from torchsummary import summary
 
 from utils.objectives import mse_recon_batch_mean, mse_recon_mean
 from utils.objectives import bce_with_logits_recon_batch_mean, bce_with_logits_recon_mean
+from utils.objectives import laplacian_recon_batch_mean, laplacian_recon_mean
 from utils.objectives import kl_divergence
 
 class VectorQuantizer(nn.Module):
@@ -100,7 +101,7 @@ class VQVAE(nn.Module):
                  input_size: int = 64,
                  layer_norm: str = "none",
                  output_activation: str = "tanh",
-                 objs: Optional[List[str]] = ["mse_sum"],
+                 recons_dist: str = "gaussian",
                  **kwargs) -> None:
         super(VQVAE, self).__init__()
 
@@ -118,20 +119,23 @@ class VQVAE(nn.Module):
         
 
         recon_obj = None
-        if "mse_sum" in objs:
-            recon_obj = mse_recon_batch_mean
-            output_activation = "tanh"
-        elif "mse_mean" in objs:
+        if recons_dist == "gaussian":
             recon_obj = mse_recon_mean
-            output_activation = "tanh"
-        elif "bce_batch_mean" in objs:
-            recon_obj = bce_with_logits_recon_batch_mean
-            output_activation = "none"
-        elif "bce_mean" in objs:
+            if output_activation == "tanh":
+                pass  # Keep tanh
+            else:
+                output_activation = "tanh"  # Default to tanh for gaussian
+        elif recons_dist == "bernoulli":
             recon_obj = bce_with_logits_recon_mean
             output_activation = "none"
+        elif recons_dist == "laplacian":
+            recon_obj = laplacian_recon_mean
+            if output_activation == "tanh":
+                pass  # Keep tanh
+            else:
+                output_activation = "tanh"  # Default to tanh for laplacian
         else:
-            raise ValueError(f"Reconstruction objective {objs} not supported")
+            raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
         self.recon_obj = recon_obj
 
         self.objectives = {"reconstruction_loss": recon_obj, "commitment_loss": None, "embedding_loss": None}

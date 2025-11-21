@@ -6,8 +6,8 @@ arch: vq_vae
 epochs: 100
 batch_size: 128
 optimizer: adam
-lr: 0.001
-wd: 0.0001
+lr: 3e-4
+wd: 0.0
 aggregator: imtlg
 normalize: true
 
@@ -27,7 +27,7 @@ save_freq: 10
 num_samples: 64
 
 # Hypervolume reference points
-hv_ref_recon: 1.1
+hv_ref: [1.1, 1.1, 1.1]
 
 # Wandb settings (optional)
 use_wandb: true

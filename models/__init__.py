@@ -1,6 +1,7 @@
 from .betatc_vae import BetaTCVAE
 from .vae import VAE
 from .vq_vae import VQVAE
+from .vq_vae2 import VQVAE2
 
 def get_network(input_size, num_channels=3, args=None):
     arch = getattr(args, "arch", "vae")
@@ -8,7 +9,7 @@ def get_network(input_size, num_channels=3, args=None):
     embedding_dim = getattr(args, "embedding_dim", 64)
     num_embeddings = getattr(args, "num_embeddings", 512)
     hidden_dims = getattr(args, "hidden_dims", [32, 64, 128, 256, 512])
-    objs = args.objs
+    recons_dist = getattr(args, "recons_dist", "gaussian")
     kld_weight = getattr(args, "kld_weight", 0.00025)
     beta = getattr(args, "beta", 1.0)
     alpha = getattr(args, "alpha", 1.0)
@@ -17,11 +18,14 @@ def get_network(input_size, num_channels=3, args=None):
     # Note: args.gamma is also used for scheduler, but they're used in different contexts
     anneal_steps = getattr(args, 'anneal_steps', 200)
     dataset_size = getattr(args, 'dataset_size', 50000)
+    output_activation = getattr(args, 'output_activation', 'tanh')
 
     if arch.lower() == 'vae':
-        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, objs=objs, kld_weight=kld_weight, beta=beta)
+        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, kld_weight=kld_weight, beta=beta)
     elif arch.lower() == 'vq_vae':
-        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, objs=objs, beta=beta)
+        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, beta=beta)
+    elif arch.lower() == 'vq_vae2':
+        return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, beta=beta)
     elif arch.lower() == 'betatc_vae' or arch.lower() == 'btc_vae':
         return BetaTCVAE(
             in_channels=num_channels,
@@ -32,7 +36,9 @@ def get_network(input_size, num_channels=3, args=None):
             beta=beta,
             gamma=gamma,
             input_size=input_size,
-            dataset_size=dataset_size
+            dataset_size=dataset_size,
+            output_activation=output_activation,
+            recons_dist=recons_dist
         )
     else:
         raise ValueError(f"Network architecture {arch} not supported")

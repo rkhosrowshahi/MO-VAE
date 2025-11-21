@@ -279,14 +279,29 @@ def build_hv_indicator(objective_keys, args):
     if len(objective_keys) < 2:
         return None
 
-    ref_point = []
-    for key in objective_keys:
-        if key == "reconstruction_loss":
-            ref_point.append(args.hv_ref_recon if args.hv_ref_recon is not None else 1e6)
-        elif key == "kl_loss":
-            ref_point.append(args.hv_ref_kl if args.hv_ref_kl is not None else 1000.0)
-        else:
-            ref_point.append(1e6)
+    num_objectives = len(objective_keys)
+    
+    # Use hv_ref list if provided and has correct length
+    if hasattr(args, 'hv_ref') and args.hv_ref is not None and len(args.hv_ref) == num_objectives:
+        ref_point = args.hv_ref
+    else:
+        # Default reference points based on objective type
+        ref_point = []
+        for key in objective_keys:
+            if key == "reconstruction_loss":
+                ref_point.append(1.1)
+            elif key == "kl_loss" or key == "kld":
+                ref_point.append(1.1)
+            elif key == "mi_loss":
+                ref_point.append(1.1)
+            elif key == "tc_loss":
+                ref_point.append(1.1)
+            elif key == "commitment_loss":
+                ref_point.append(1.1)
+            elif key == "embedding_loss":
+                ref_point.append(1.1)
+            else:
+                ref_point.append(1.1)  # Default for unknown objectives
 
     return HV(ref_point=np.array(ref_point))
 
@@ -519,7 +534,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_activation", type=str, default="tanh")
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
-    parser.add_argument("--objs", type=str, nargs="+", default=["mse_mean", "kld"])
+    parser.add_argument("--recons_dist", type=str, default="gaussian", choices=["bernoulli", "gaussian", "laplacian"], help="Reconstruction distribution: bernoulli (BCE), gaussian (MSE), or laplacian (L1)")
     parser.add_argument("--kld_weight", type=float, default=0.00025)
     parser.add_argument("--optimizer", type=str, default="adam")
     parser.add_argument("--momentum", type=float, default=0.9)
@@ -536,8 +551,7 @@ if __name__ == "__main__":
     parser.add_argument("--beta", type=float, default=1.0)
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--anneal_steps", type=int, default=200)
-    parser.add_argument("--hv_ref_recon", type=float, default=None)
-    parser.add_argument("--hv_ref_kl", type=float, default=None)
+    parser.add_argument("--hv_ref", type=float, nargs="+", default=[1.1, 1.1])
     parser.add_argument("--num_samples", type=int, default=64)
     parser.add_argument("--save_freq", type=int, default=10)
     parser.add_argument("--use_wandb", action="store_true")

@@ -53,6 +53,7 @@ def get_dataset(dataset_name, normalize=False):
         transform_test = [transforms.ToTensor()]
         
         if normalize:
+            print("Normalizing CIFAR10 train and test datasets")
             transform_train.append(transforms.Normalize(mean, std))
             transform_test.append(transforms.Normalize(mean, std))
 
@@ -82,6 +83,7 @@ def get_dataset(dataset_name, normalize=False):
         transform_test = [transforms.ToTensor()]
 
         if normalize:
+            print("Normalizing CIFAR100 train and test datasets")
             transform_train.append(transforms.Normalize(mean, std))
             transform_test.append(transforms.Normalize(mean, std))
 
@@ -125,6 +127,8 @@ def get_dataset(dataset_name, normalize=False):
         class_names = [f'class {i}' for i in range(1000)]
     elif dataset_name.lower() == "celeba":
         input_size = 64
+        mean = (0.5, 0.5, 0.5)
+        std = (0.5, 0.5, 0.5)
         train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
                                               transforms.CenterCrop(148),
                                               transforms.Resize(input_size),
@@ -134,6 +138,10 @@ def get_dataset(dataset_name, normalize=False):
                                             transforms.CenterCrop(148),
                                             transforms.Resize(input_size),
                                             transforms.ToTensor(),])
+
+        if normalize:
+            train_transforms.append(transforms.Normalize(mean, std))
+            val_transforms.append(transforms.Normalize(mean, std))
         
         train_dataset = MyCelebA(
             './data',

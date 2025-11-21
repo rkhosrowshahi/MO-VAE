@@ -1,0 +1,12 @@
+scripts/celeba/betatc_vae/sum/mse.yaml
+scripts/celeba/betatc_vae/upgrad/mse.yaml
+scripts/celeba/betatc_vae/dualproj/mse.yaml
+scripts/celeba/betatc_vae/aligned_mtl/mse.yaml
+scripts/celeba/betatc_vae/imtlg/mse.yaml
+scripts/celeba/betatc_vae/mgda/mse.yaml
+scripts/celeba/betatc_vae/pcgrad/mse.yaml
+scripts/celeba/betatc_vae/cagrad/mse.yaml
+scripts/celeba/betatc_vae/nashmtl/mse.yaml
+scripts/celeba/betatc_vae/jd_sum/mse.yaml
+
+

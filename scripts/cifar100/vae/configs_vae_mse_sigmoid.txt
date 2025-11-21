@@ -1,0 +1,10 @@
+scripts/cifar100/vae/sum/mse_sigmoid.yaml
+scripts/cifar100/vae/upgrad/mse_sigmoid.yaml
+scripts/cifar100/vae/dualproj/mse_sigmoid.yaml
+scripts/cifar100/vae/aligned_mtl/mse_sigmoid.yaml
+scripts/cifar100/vae/imtlg/mse_sigmoid.yaml
+scripts/cifar100/vae/mgda/mse_sigmoid.yaml
+scripts/cifar100/vae/pcgrad/mse_sigmoid.yaml
+scripts/cifar100/vae/cagrad/mse_sigmoid.yaml
+scripts/cifar100/vae/nashmtl/mse_sigmoid.yaml
+scripts/cifar100/vae/jd_sum/mse_sigmoid.yaml

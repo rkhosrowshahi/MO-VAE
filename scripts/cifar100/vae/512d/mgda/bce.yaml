@@ -31,6 +31,6 @@ hv_ref: [1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "cifar100 128d bce+kld MGDA"
+wandb_name: "cifar100 512d bce+kld MGDA"
 
 

@@ -332,7 +332,7 @@ def main(args):
 
     args.dataset_size = len(train_dataset)
 
-    net = get_network(input_size, num_channels=3, args=args).to(device)
+    net = get_network(input_size, num_channels=3, args=args, device=device).to(device)
     args.total_params = net.total_trainable_params()
 
     if args.optimizer == "sgd":

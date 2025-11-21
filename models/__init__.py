@@ -1,9 +1,10 @@
-from .betatc_vae import BetaTCVAE
 from .vae import VAE
+from .gg_vae import GGVAE
 from .vq_vae import VQVAE
 from .vq_vae2 import VQVAE2
+from .betatc_vae import BetaTCVAE
 
-def get_network(input_size, num_channels=3, args=None):
+def get_network(input_size, num_channels=3, args=None, device=None):
     arch = getattr(args, "arch", "vae")
     latent_dim = getattr(args, "latent_dim", 128)
     embedding_dim = getattr(args, "embedding_dim", 64)
@@ -22,11 +23,13 @@ def get_network(input_size, num_channels=3, args=None):
     output_activation = getattr(args, 'output_activation', 'tanh')
 
     if arch.lower() == 'vae':
-        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, kld_weight=kld_weight, beta=beta)
+        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, kld_weight=kld_weight, beta=beta, device=device)
+    elif arch.lower() == 'gg_vae':
+        return GGVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, kld_weight=kld_weight, beta=beta, device=device)
     elif arch.lower() == 'vq_vae':
-        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta)
+        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta, device=device)
     elif arch.lower() == 'vq_vae2':
-        return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta)
+        return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta, device=device)
     elif arch.lower() == 'betatc_vae' or arch.lower() == 'btc_vae':
         return BetaTCVAE(
             in_channels=num_channels,
@@ -40,7 +43,8 @@ def get_network(input_size, num_channels=3, args=None):
             dataset_size=dataset_size,
             output_activation=output_activation,
             recons_dist=recons_dist,
-            recons_reduction=recons_reduction
+            recons_reduction=recons_reduction,
+            device=device
         )
     else:
         raise ValueError(f"Network architecture {arch} not supported")

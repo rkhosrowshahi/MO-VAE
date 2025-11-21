@@ -103,9 +103,12 @@ class VQVAE(nn.Module):
                  output_activation: str = "tanh",
                  recons_dist: str = "gaussian",
                  recons_reduction: str = "mean",
+                 device=None,
                  **kwargs) -> None:
         super(VQVAE, self).__init__()
 
+        self.device = device
+        
         self.embedding_dim = embedding_dim
         self.num_embeddings = num_embeddings
         self.input_size = input_size

@@ -1,7 +1,6 @@
-from math import ceil, floor
-
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 from torchsummary import summary
 
 from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled, bce_per_image_sum, bce_per_pixel_mean, laplacian_per_image_sum, laplacian_per_pixel_mean, kl_divergence
@@ -23,12 +22,11 @@ class UnFlatten(nn.Module):
     def forward(self, input, size=128):
         return input.view(-1, size, 4, 4)
 
-
-# Define the VAE model
-class VAE(nn.Module):
+# Define the GGVAE model
+class GGVAE(nn.Module):
     def __init__(self, latent_dim=2, input_size=32, in_channels=3, hidden_dims=None, layer_norm="batch", output_activation="tanh", recons_dist="gaussian", recons_reduction="mean", kld_weight=0.00025, beta=1.0, device=None):
-        super(VAE, self).__init__()
-
+        super(GGVAE, self).__init__()
+        
         self.device = device
         
         recon_obj = None
@@ -73,7 +71,18 @@ class VAE(nn.Module):
         self.recon_obj = recon_obj
         self.kld_obj = kld_obj
 
-        self.objectives = {"reconstruction_loss": recon_obj, "kld_loss": kld_obj}
+        sobel_x = torch.tensor([[-1., 0., 1.],
+                            [-2., 0.,  2.],
+                            [-1,  0.,  1.]]).unsqueeze(0).unsqueeze(0) #(1,1,3,3)
+
+        sobel_y = torch.tensor([[-1., -2., -1.],
+                                [ 0.,  0.,  0.],
+                                [ 1.,  2.,  1.]]).unsqueeze(0).unsqueeze(0) #(1,1,3,3)
+        # Ensuring sobel filters can apply to RGB images - register as buffers so they move with model
+        self.register_buffer('sobel_x', sobel_x.expand(3, 1, 3, 3))
+        self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3))
+
+        self.objectives = {"reconstruction_loss": recon_obj, 'gradient_guided_loss': self.gradient_guided_loss, "kld_loss": kld_obj}
 
         self.features = ["mu", "log_var"]
 
@@ -204,16 +213,41 @@ class VAE(nn.Module):
     def total_trainable_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
+    def gradient_guided_loss(self,inputs, recons):
+        # Sobel applied to R,G,B
+        x_grad = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        y_grad = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+
+        #Gradient magnitude
+        grad_mag = torch.sqrt(x_grad**2 + y_grad**2)# (batch_size,C,H,W)
+
+        # Combining across channels - take max across channels
+        grad_max = torch.max(grad_mag, dim=1)[0]
+
+        # Normalizing
+        grad_max = (grad_max - grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1)) / \
+                            (grad_max.view(grad_max.size(0), -1).max(1, keepdim=True)[0].unsqueeze(-1) -
+                            grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1))
+
+        # non-reduced reconstruction loss (B, C, H, W)
+        pixel_loss = F.mse_loss(recons, inputs, reduction='none')
+
+        #Gradient-guided Encoder Loss
+        loss_grad = (grad_max.unsqueeze(1) * pixel_loss).mean() #(batch_size, C, H, W) then mean across batch
+
+        return loss_grad
+
     def loss_function(self, inputs, args: dict) -> dict:
         recons = args["recons"]
         mu = args["mu"]
         log_var = args["log_var"]
 
         recon_loss = self.objectives["reconstruction_loss"](inputs, recons)
+        gradient_guided_loss = self.objectives["gradient_guided_loss"](inputs, recons)
         kld_loss = self.beta * self.kld_weight * self.objectives["kld_loss"](mu, log_var)
         
 
-        return {"reconstruction_loss": recon_loss, "kld_loss": kld_loss}
+        return {"reconstruction_loss": recon_loss, "gradient_guided_loss": gradient_guided_loss, "kld_loss": kld_loss}
 
     def sample(self, num_samples=1, device=None):
         """

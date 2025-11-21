@@ -26,10 +26,13 @@ class BetaTCVAE(nn.Module):
         output_activation: str = "tanh",
         recons_dist: str = "gaussian",
         recons_reduction: str = "mean",
+        device=None,
         **kwargs
     ) -> None:
         super(BetaTCVAE, self).__init__()
 
+        self.device = device
+        
         recon_obj = None
         if recons_dist == "gaussian":
             if recons_reduction == "mean":

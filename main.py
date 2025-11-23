@@ -457,6 +457,9 @@ def main(args):
     objective_keys = net.objectives.keys()
     hv_indicator = build_hv_indicator(objective_keys, args)
 
+    # Track best model
+    best_eval_loss = float('inf')
+    
     step = 0
     for epoch in tqdm(range(1, args.epochs + 1)):
         train_loss_meters, step = train_epoch(
@@ -551,22 +554,76 @@ def main(args):
 
         if scheduler is not None:
             scheduler.step()
+
+        tqdm.write(
+            f" Epoch {epoch}/{args.epochs} - Train - "
+            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in train_loss_meters.items())
+            + f", HV: {train_hv:.2e}"
+        )
+        tqdm.write(
+            f" Epoch {epoch}/{args.epochs} - Eval - "
+            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
+            + f", HV: {eval_hv:.2e}"
+        )
         
+        # Save best model based on total eval loss
+        current_eval_loss = eval_loss_meters['total_loss'].avg
+        if current_eval_loss < best_eval_loss:
+            best_eval_loss = current_eval_loss
+            best_ckpt = os.path.join(save_root, "checkpoints", "best_checkpoint.pth")
+            checkpoint_data = {
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'args': vars(args),
+                'train_losses': {key: meter.avg for key, meter in train_loss_meters.items()},
+                'eval_losses': {key: meter.avg for key, meter in eval_loss_meters.items()},
+                'best_eval_loss': best_eval_loss,
+            }
+            if scheduler is not None:
+                checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
+            
+            torch.save(checkpoint_data, best_ckpt)
+            tqdm.write(f" *** Best model saved at epoch {epoch} with eval loss: {best_eval_loss:.6e} ***")
 
     tqdm.write("Training completed!")
+    
+    # Save final epoch checkpoint with complete information
     final_ckpt = os.path.join(save_root, "checkpoints", "final_checkpoint.pth")
-    torch.save(net.state_dict(), final_ckpt)
+    checkpoint_data = {
+        'epoch': args.epochs,
+        'model_state_dict': net.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'args': vars(args),
+        'train_losses': {key: meter.avg for key, meter in train_loss_meters.items()},
+        'eval_losses': {key: meter.avg for key, meter in eval_loss_meters.items()},
+        'best_eval_loss': best_eval_loss,
+    }
+    
+    # Add scheduler state if it exists
+    if scheduler is not None:
+        checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
+    
+    torch.save(checkpoint_data, final_ckpt)
+    tqdm.write(f"Final checkpoint (last epoch) saved to: {final_ckpt}")
+    tqdm.write(f"Best checkpoint (eval loss: {best_eval_loss:.6e}) saved to: {os.path.join(save_root, 'checkpoints', 'best_checkpoint.pth')}")
 
     if args.use_wandb:
         try:
             wandb.save(final_ckpt)
+            best_ckpt_path = os.path.join(save_root, "checkpoints", "best_checkpoint.pth")
+            wandb.save(best_ckpt_path)
         except (OSError, PermissionError):
             try:
                 artifact = wandb.Artifact("final_model", type="model")
                 artifact.add_file(final_ckpt)
+                artifact.add_file(os.path.join(save_root, "checkpoints", "best_checkpoint.pth"))
                 wandb.log_artifact(artifact)
             except Exception:
-                wandb.log({"final_checkpoint_path": final_ckpt})
+                wandb.log({
+                    "final_checkpoint_path": final_ckpt,
+                    "best_checkpoint_path": os.path.join(save_root, "checkpoints", "best_checkpoint.pth")
+                })
         wandb.finish()
 
 

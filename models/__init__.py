@@ -4,6 +4,7 @@ from .vq_vae import VQVAE
 from .gg_vq_vae import GGVQVAE
 from .vq_vae2 import VQVAE2
 from .betatc_vae import BetaTCVAE
+from .pixelcnn_prior import PixelCNN, HierarchicalPixelCNN
 
 def get_network(input_size, num_channels=3, args=None, device=None):
     arch = getattr(args, "arch", "vae")

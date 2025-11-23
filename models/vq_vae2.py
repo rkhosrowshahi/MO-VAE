@@ -350,10 +350,65 @@ class VQVAE2(nn.Module):
             "embedding_loss": weighted_embedding_loss,
         }
 
+    def get_code_indices(self, input: Tensor) -> Dict[str, Tensor]:
+        """
+        Extract discrete code indices from input.
+        Used for training PixelCNN prior.
+        
+        Args:
+            input: [B, C, H, W] input images
+        
+        Returns:
+            Dictionary with 'indices_top' [B, H_t, W_t] and 'indices_bottom' [B, H_b, W_b]
+        """
+        self.eval()
+        with torch.no_grad():
+            # Encode
+            enc_b = self.enc_bottom(input)
+            enc_t = self.enc_top(enc_b)
+            
+            # Get top indices
+            enc_t_perm = enc_t.permute(0, 2, 3, 1).contiguous()
+            flat_enc_t = enc_t_perm.view(-1, self.embedding_dim)
+            
+            # Compute distances to top codebook
+            dist_t = torch.sum(flat_enc_t ** 2, dim=1, keepdim=True) + \
+                     torch.sum(self.vq_top.embedding.weight ** 2, dim=1) - \
+                     2 * torch.matmul(flat_enc_t, self.vq_top.embedding.weight.t())
+            indices_t = torch.argmin(dist_t, dim=1)
+            
+            # Reshape to spatial dimensions
+            B = input.size(0)
+            indices_t = indices_t.view(B, self.latent_spatial_dim_top, self.latent_spatial_dim_top)
+            
+            # Get bottom indices
+            quant_b_input = self.bottom_pre_vq(enc_b)
+            quant_b_input_perm = quant_b_input.permute(0, 2, 3, 1).contiguous()
+            flat_enc_b = quant_b_input_perm.view(-1, self.embedding_dim)
+            
+            # Compute distances to bottom codebook
+            dist_b = torch.sum(flat_enc_b ** 2, dim=1, keepdim=True) + \
+                     torch.sum(self.vq_bottom.embedding.weight ** 2, dim=1) - \
+                     2 * torch.matmul(flat_enc_b, self.vq_bottom.embedding.weight.t())
+            indices_b = torch.argmin(dist_b, dim=1)
+            
+            # Reshape to spatial dimensions
+            indices_b = indices_b.view(B, self.latent_spatial_dim_bottom, self.latent_spatial_dim_bottom)
+            
+        return {
+            'indices_top': indices_t,
+            'indices_bottom': indices_b
+        }
+
     def sample(self, num_samples=1, device=None):
         """
         Sample uniformly from codebooks (random noise generation).
         Requires a prior (e.g. PixelCNN) for meaningful generation.
+        
+        For proper sampling with learned prior, use:
+            from models.pixelcnn_prior import HierarchicalPixelCNN
+            prior = HierarchicalPixelCNN(...)
+            samples = prior.sample_with_vqvae2(vqvae2_model, batch_size, device)
         """
         self.eval()
         with torch.no_grad():

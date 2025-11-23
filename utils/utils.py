@@ -121,20 +121,23 @@ def get_dataset(dataset_name, normalize=False):
         input_size = 64
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
-        train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
+        train_transforms = [transforms.RandomHorizontalFlip(),
                                               transforms.CenterCrop(148),
                                               transforms.Resize(input_size),
-                                              transforms.ToTensor(),])
+                                              transforms.ToTensor(),]
         
-        val_transforms = transforms.Compose([
+        val_transforms = [
                                             transforms.CenterCrop(148),
                                             transforms.Resize(input_size),
-                                            transforms.ToTensor(),])
+                                            transforms.ToTensor(),]
 
         if normalize:
             train_transforms.append(transforms.Normalize(mean, std))
-            val_transforms.append(transforms.Normalize(mean, std))
-        
+            val_transforms.append(transforms.Normalize(mean, std))  
+
+        train_transforms = transforms.Compose(train_transforms)
+        val_transforms = transforms.Compose(val_transforms)
+
         train_dataset = MyCelebA(
             './data',
             split='train',

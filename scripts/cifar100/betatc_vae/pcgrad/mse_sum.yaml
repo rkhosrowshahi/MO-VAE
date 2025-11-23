@@ -14,11 +14,8 @@ normalize: true
 # Model architecture
 latent_dim: 128
 hidden_dims: [32, 32, 64, 64]
-beta: 6.0
-alpha: 1.0
-gamma: 1.0
+loss_weights: [1.0, 1.0, 6.0, 1.0]
 anneal_steps: 10000
-recons_weight: 0.0003255208333333333
 output_activation: tanh
 recons_dist: gaussian
 recons_reduction: sum

@@ -21,6 +21,38 @@ from torchjd.aggregation import (
     DualProj,
     Sum
 )
+# Monkey patch AlignedMTL to fix numerical instability
+# from torchjd.aggregation._aligned_mtl import AlignedMTLWeighting
+
+# def _compute_balance_transformation_patched(M: torch.Tensor) -> torch.Tensor:
+#     # Add jitter for stability
+#     M_stab = M + 1e-6 * torch.eye(len(M), device=M.device, dtype=M.dtype)
+    
+#     try:
+#         lambda_, V = torch.linalg.eigh(M_stab, UPLO="U")
+#     except torch._C._LinAlgError:
+#          # Fallback to CPU if GPU fails despite jitter
+#          lambda_, V = torch.linalg.eigh(M_stab.cpu(), UPLO="U")
+#          lambda_ = lambda_.to(M.device)
+#          V = V.to(M.device)
+
+#     tol = torch.max(lambda_) * len(M) * torch.finfo().eps
+#     rank = sum(lambda_ > tol)
+
+#     if rank == 0:
+#         identity = torch.eye(len(M), dtype=M.dtype, device=M.device)
+#         return identity
+
+#     order = torch.argsort(lambda_, dim=-1, descending=True)
+#     lambda_, V = lambda_[order][:rank], V[:, order][:, :rank]
+
+#     sigma_inv = torch.diag(1 / lambda_.sqrt())
+#     lambda_R = lambda_[-1]
+#     B = lambda_R.sqrt() * V @ sigma_inv @ V.T
+#     return B
+
+# AlignedMTLWeighting._compute_balance_transformation = staticmethod(_compute_balance_transformation_patched)
+
 import wandb
 from pymoo.indicators.hv import HV
 import matplotlib
@@ -78,7 +110,9 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
         total_loss = sum(loss_dict.values())
 
         if total_loss.item() > 1e15:
-            print(f"EXPLODING: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
+            tqdm.write(f"Step {step}: EXPLODING: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
+        # else:
+        #     tqdm.write(f"Step {step}: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
 
         # Verify decoder gradients match between mtl_backward and standard backward
         # This ensures that KLD (which doesn't use decoder) doesn't affect decoder gradients via MTL
@@ -145,6 +179,7 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
                     losses=list(loss_dict.values()),
                     features=features,
                     aggregator=aggregator,
+                    retain_graph=True,
                 )
             else:
                 backward(loss_dict.values(), aggregator=aggregator)
@@ -334,6 +369,11 @@ def main(args):
 
     net = get_network(input_size, num_channels=3, args=args, device=device).to(device)
     args.total_params = net.total_trainable_params()
+    
+    # Register each lambda weight separately in args for easier access
+    for loss_name, weight in net.lambda_weights.items():
+        attr_name = f"{loss_name}_weight"
+        setattr(args, attr_name, weight)
 
     if args.optimizer == "sgd":
         optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.wd)
@@ -428,9 +468,47 @@ def main(args):
             device=device,
             args=args,
         )
-        eval_loss_meters = evaluate(net, test_loader, device=device, args=args)
+
+        if hv_indicator is not None:
+            train_point = np.array([[train_loss_meters[key].avg for key in objective_keys]])
+            train_hv = hv_indicator(train_point)
+        else:
+            train_hv = float("nan")
+
+        tqdm.write(
+            f" Epoch {epoch}/{args.epochs} - Train - "
+            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in train_loss_meters.items())
+            + f", HV: {train_hv:.2e}"
+        )
+
+        log_dict = {
+            "epoch": epoch,
+            **{f"train/{key}": meter.avg for key, meter in train_loss_meters.items()},
+            "train/hv": train_hv,
+            "train/lr": optimizer.param_groups[0]["lr"],
+        }
+
+        if epoch % args.eval_freq == 0 or epoch in {1, args.epochs}:
+            eval_loss_meters = evaluate(net, test_loader, device=device, args=args)
+
+            log_dict.update({f"eval/{key}": meter.avg for key, meter in eval_loss_meters.items()})
+
+            if hv_indicator is not None:
+                eval_point = np.array([[eval_loss_meters[key].avg for key in objective_keys]])
+                eval_hv = hv_indicator(eval_point)
+            else:
+                eval_hv = float("nan")
+            
+            tqdm.write(
+                f" Epoch {epoch}/{args.epochs} - Eval - "
+                + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
+                + f", HV: {eval_hv:.2e}"
+            )
+
+            log_dict.update({"eval/hv": eval_hv})
 
         if (epoch % args.save_freq == 0) or epoch in {1, args.epochs}:
+
             gen_path = os.path.join(save_root, "figures", "generated", f"epoch_{epoch:03d}_random_samples.pdf")
             generate_random_samples(
                 net,
@@ -468,40 +546,12 @@ def main(args):
                 step=step,
             )
 
-        if hv_indicator is not None:
-            train_point = np.array([[train_loss_meters[key].avg for key in objective_keys]])
-            eval_point = np.array([[eval_loss_meters[key].avg for key in objective_keys]])
-            train_hv = hv_indicator(train_point)
-            eval_hv = hv_indicator(eval_point)
-        else:
-            train_hv = float("nan")
-            eval_hv = float("nan")
-
-        log_dict = {
-            "epoch": epoch,
-            **{f"train/{key}": meter.avg for key, meter in train_loss_meters.items()},
-            **{f"eval/{key}": meter.avg for key, meter in eval_loss_meters.items()},
-            "train/hv": train_hv,
-            "eval/hv": eval_hv,
-            "train/lr": optimizer.param_groups[0]["lr"],
-        }
-
         if args.use_wandb:
             wandb.log(log_dict, step=step)
 
         if scheduler is not None:
             scheduler.step()
-
-        tqdm.write(
-            f" Epoch {epoch}/{args.epochs} - Train - "
-            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in train_loss_meters.items())
-            + f", HV: {train_hv:.2e}"
-        )
-        tqdm.write(
-            f" Epoch {epoch}/{args.epochs} - Eval - "
-            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
-            + f", HV: {eval_hv:.2e}"
-        )
+        
 
     tqdm.write("Training completed!")
     final_ckpt = os.path.join(save_root, "checkpoints", "final_checkpoint.pth")
@@ -539,8 +589,7 @@ if __name__ == "__main__":
     parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
     parser.add_argument("--recons_dist", type=str, default="gaussian", choices=["bernoulli", "gaussian", "laplacian"], help="Reconstruction distribution: bernoulli (BCE), gaussian (MSE), or laplacian (L1)")
     parser.add_argument("--recons_reduction", type=str, default="mean", choices=["mean", "sum", "scaled_sum"], help="Loss reduction type: mean (per_pixel_mean), sum (per_image_sum), scaled_sum (total_batch_sum_scaled - MSE only)")
-    parser.add_argument("--recons_weight", type=float, default=1.0)
-    parser.add_argument("--kld_weight", type=float, default=0.00025)
+    parser.add_argument("--loss_weights", type=float, nargs="+", default=[1.0, 1.0])
     parser.add_argument("--optimizer", type=str, default="adam")
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--max_grad_norm", type=float, default=None)
@@ -552,13 +601,11 @@ if __name__ == "__main__":
     parser.add_argument("--scheduler_milestones", type=int, nargs="+", default=None)
     parser.add_argument("--embedding_dim", type=int, default=64)
     parser.add_argument("--num_embeddings", type=int, default=512)
-    parser.add_argument("--alpha", type=float, default=1.0)
-    parser.add_argument("--beta", type=float, default=1.0)
-    parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--anneal_steps", type=int, default=200)
     parser.add_argument("--hv_ref", type=float, nargs="+", default=[1.1, 1.1])
     parser.add_argument("--num_samples", type=int, default=64)
     parser.add_argument("--save_freq", type=int, default=10)
+    parser.add_argument("--eval_freq", type=int, default=10)
     parser.add_argument("--use_wandb", action="store_true")
     parser.add_argument("--wandb_project", type=str, default="mo-vae")
     parser.add_argument("--wandb_entity", type=str, default=None)

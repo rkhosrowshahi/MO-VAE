@@ -16,10 +16,8 @@ normalize: false
 # Model architecture
 latent_dim: 128
 hidden_dims: [32, 32, 64, 64]
+loss_weights: [1.0, 1.0, 6.0, 1.0]
 # BetaTC-VAE specific parameters
-alpha: 1.0
-beta: 6.0
-gamma: 1.0
 anneal_steps: 10000
 
 # Training settings

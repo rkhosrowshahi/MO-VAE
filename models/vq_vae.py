@@ -6,10 +6,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from torchsummary import summary
 
-from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled
-from utils.objectives import bce_with_logits_per_image_sum, bce_with_logits_per_pixel_mean
+from utils.objectives import bce_per_pixel_mean, bce_per_image_sum, mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled
 from utils.objectives import laplacian_per_image_sum, laplacian_per_pixel_mean
-from utils.objectives import kl_divergence
 
 class VectorQuantizer(nn.Module):
     """
@@ -17,13 +15,11 @@ class VectorQuantizer(nn.Module):
     """
     def __init__(self,
                  num_embeddings: int,
-                 embedding_dim: int,
-                 beta: float = 0.25):
+                 embedding_dim: int):
         super(VectorQuantizer, self).__init__()
 
         self.K = num_embeddings
         self.D = embedding_dim
-        self.beta = beta
         self._summary_mode = False
 
         self.embedding = nn.Embedding(self.K, self.D)
@@ -97,12 +93,12 @@ class VQVAE(nn.Module):
                  embedding_dim: int,
                  num_embeddings: int,
                  hidden_dims: Optional[List[int]] = [128, 256],
-                 beta: float = 0.25,
                  input_size: int = 64,
                  layer_norm: str = "none",
                  output_activation: str = "tanh",
                  recons_dist: str = "gaussian",
                  recons_reduction: str = "mean",
+                 lambda_weights: Optional[List[float]] = None,
                  device=None,
                  **kwargs) -> None:
         super(VQVAE, self).__init__()
@@ -113,7 +109,6 @@ class VQVAE(nn.Module):
         self.num_embeddings = num_embeddings
         self.input_size = input_size
         self.in_channels = in_channels
-        self.beta = beta
         self._summary_mode = False
         
         # Calculate spatial dimensions of latent space
@@ -139,12 +134,12 @@ class VQVAE(nn.Module):
                 output_activation = "tanh"  # Default to tanh for gaussian
         elif recons_dist == "bernoulli":
             if recons_reduction == "mean":
-                recon_obj = bce_with_logits_per_pixel_mean
+                recon_obj = bce_per_pixel_mean
             elif recons_reduction == "sum":
-                recon_obj = bce_with_logits_per_image_sum
+                recon_obj = bce_per_image_sum
             else:
                  raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
-            output_activation = "none"
+            output_activation = "sigmoid"
         elif recons_dist == "laplacian":
             if recons_reduction == "mean":
                 recon_obj = laplacian_per_pixel_mean
@@ -163,6 +158,37 @@ class VQVAE(nn.Module):
         self.objectives = {"reconstruction_loss": recon_obj, "commitment_loss": None, "embedding_loss": None}
 
         self.features = ["encoding"]
+
+        # lambda_weights: dictionary matching self.objectives keys
+        # Accepts either dict or list (for backward compatibility)
+        if lambda_weights is None:
+            lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 1.0, "embedding_loss": 1.0}
+        elif isinstance(lambda_weights, list):
+            # Convert list to dict: [reconstruction_weight, commitment_weight, embedding_weight]
+            if len(lambda_weights) != 3:
+                raise ValueError(f"VQVAE requires 3 lambda_weights (reconstruction, commitment, embedding), got {len(lambda_weights)}")
+            lambda_weights = {
+                "reconstruction_loss": lambda_weights[0],
+                "commitment_loss": lambda_weights[1],
+                "embedding_loss": lambda_weights[2]
+            }
+        elif isinstance(lambda_weights, dict):
+            # Validate dict keys match objectives
+            expected_keys = set(self.objectives.keys())
+            provided_keys = set(lambda_weights.keys())
+            if expected_keys != provided_keys:
+                missing = expected_keys - provided_keys
+                extra = provided_keys - expected_keys
+                error_msg = f"lambda_weights keys must match objectives keys. "
+                if missing:
+                    error_msg += f"Missing: {missing}. "
+                if extra:
+                    error_msg += f"Extra: {extra}."
+                raise ValueError(error_msg)
+        else:
+            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
+        
+        self.lambda_weights = lambda_weights
 
         modules = []
         
@@ -221,8 +247,7 @@ class VQVAE(nn.Module):
         self.encoder = nn.Sequential(*modules)
 
         self.vq_layer = VectorQuantizer(num_embeddings,
-                                        embedding_dim,
-                                        self.beta)
+                                        embedding_dim)
 
         # Build Decoder
         modules = []
@@ -319,13 +344,18 @@ class VQVAE(nn.Module):
 
         recons = args["recons"]
         commitment_loss = args["commitment_loss"]
-        embedding_loss = self.beta * args["embedding_loss"]
-        recon_loss = self.recon_obj(recons, inputs)
+        embedding_loss = args["embedding_loss"]
+        recon_loss = self.recon_obj(inputs, recons)
+        
+        # Apply lambda_weights using dictionary keys matching self.objectives
+        weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
+        weighted_commitment_loss = self.lambda_weights["commitment_loss"] * commitment_loss
+        weighted_embedding_loss = self.lambda_weights["embedding_loss"] * embedding_loss
         
         return {
-            "reconstruction_loss": recon_loss,
-            "commitment_loss": commitment_loss,
-            "embedding_loss": embedding_loss,
+            "reconstruction_loss": weighted_recon_loss,
+            "commitment_loss": weighted_commitment_loss,
+            "embedding_loss": weighted_embedding_loss,
         }
 
     def sample(self, num_samples=1, device=None):

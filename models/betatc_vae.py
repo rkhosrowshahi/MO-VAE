@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torchsummary import summary
 import math
-from typing import List, Callable, Union, Any, TypeVar, Tuple
+from typing import List, Callable, Union, Any, TypeVar, Tuple, Optional
 
 from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled, bce_per_image_sum, bce_per_pixel_mean, laplacian_per_image_sum, laplacian_per_pixel_mean
 Tensor = TypeVar('torch.tensor')
@@ -18,14 +18,12 @@ class BetaTCVAE(nn.Module):
         latent_dim: int,
         hidden_dims: List = None,
         anneal_steps: int = 200,
-        alpha: float = 1.0,
-        beta: float = 6.0,
-        gamma: float = 1.0,
         input_size: int = 32,
         dataset_size: int = None,
         output_activation: str = "tanh",
         recons_dist: str = "gaussian",
         recons_reduction: str = "mean",
+        lambda_weights: Optional[List[float]] = None,
         device=None,
         **kwargs
     ) -> None:
@@ -76,10 +74,6 @@ class BetaTCVAE(nn.Module):
         self.in_channels = in_channels
         self.dataset_size = dataset_size  # Used for M_N calculation
 
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
-
         # Set up objectives dict for compatibility with training loop
         # These keys match the loss function return keys
         self.objectives = {
@@ -88,6 +82,38 @@ class BetaTCVAE(nn.Module):
             "tc_loss": None,
             "kld": None,
         }
+
+        # lambda_weights: dictionary matching self.objectives keys
+        # Accepts either dict or list (for backward compatibility)
+        if lambda_weights is None:
+            lambda_weights = {"reconstruction_loss": 1.0, "mi_loss": 1.0, "tc_loss": 1.0, "kld": 1.0}
+        elif isinstance(lambda_weights, list):
+            # Convert list to dict: [reconstruction_weight, mi_weight, tc_weight, kld_weight]
+            if len(lambda_weights) != 4:
+                raise ValueError(f"BetaTCVAE requires 4 lambda_weights (reconstruction, mi, tc, kld), got {len(lambda_weights)}")
+            lambda_weights = {
+                "reconstruction_loss": lambda_weights[0],
+                "mi_loss": lambda_weights[1],
+                "tc_loss": lambda_weights[2],
+                "kld": lambda_weights[3]
+            }
+        elif isinstance(lambda_weights, dict):
+            # Validate dict keys match objectives
+            expected_keys = set(self.objectives.keys())
+            provided_keys = set(lambda_weights.keys())
+            if expected_keys != provided_keys:
+                missing = expected_keys - provided_keys
+                extra = provided_keys - expected_keys
+                error_msg = f"lambda_weights keys must match objectives keys. "
+                if missing:
+                    error_msg += f"Missing: {missing}. "
+                if extra:
+                    error_msg += f"Extra: {extra}."
+                raise ValueError(error_msg)
+        else:
+            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
+        
+        self.lambda_weights = lambda_weights
 
         self.features = ["mu", "log_var"]
 
@@ -313,13 +339,19 @@ class BetaTCVAE(nn.Module):
         else:
             anneal_rate = 1.0
 
+        # Apply lambda_weights using dictionary keys matching self.objectives
         # Note: The total loss is computed as sum of all returned losses in training loop
         # So we return the individual components scaled appropriately
+        weighted_recons_loss = self.lambda_weights["reconstruction_loss"] * recons_loss
+        weighted_mi_loss = self.lambda_weights["mi_loss"] * mi_loss
+        weighted_tc_loss = self.lambda_weights["tc_loss"] * weight * tc_loss
+        weighted_kld_loss = self.lambda_weights["kld"] * weight * anneal_rate * kld_loss
+        
         return {
-            "reconstruction_loss": recons_loss,
-            "mi_loss": self.alpha * mi_loss,
-            "tc_loss": weight * self.beta * tc_loss,
-            "kld": weight * anneal_rate * self.gamma * kld_loss,
+            "reconstruction_loss": weighted_recons_loss,
+            "mi_loss": weighted_mi_loss,
+            "tc_loss": weighted_tc_loss,
+            "kld": weighted_kld_loss,
         }
 
     def sample(self, num_samples: int, device: int = None, **kwargs) -> Tensor:

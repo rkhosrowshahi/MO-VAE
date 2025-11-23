@@ -15,7 +15,7 @@ normalize: false
 latent_dim: 512
 hidden_dims: [32, 64, 128, 256]
 # kld_weight: 1.5e-3
-kld_weight: 2.5e-4
+loss_weights: [1.0, 0.00025]
 layer_norm: batch
 output_activation: sigmoid
 

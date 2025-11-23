@@ -24,7 +24,14 @@ class UnFlatten(nn.Module):
 
 # Define the GGVAE model
 class GGVAE(nn.Module):
-    def __init__(self, latent_dim=2, input_size=32, in_channels=3, hidden_dims=None, layer_norm="batch", output_activation="tanh", recons_dist="gaussian", recons_reduction="mean", kld_weight=0.00025, beta=1.0, device=None):
+    def __init__(self, 
+                 latent_dim=2, 
+                 input_size=32, 
+                 in_channels=3, 
+                 hidden_dims=None, 
+                 layer_norm="batch", 
+                 output_activation="tanh", 
+                 recons_dist="gaussian", recons_reduction="mean", lambda_weights=None, device=None, **kwargs):
         super(GGVAE, self).__init__()
         
         self.device = device
@@ -86,8 +93,36 @@ class GGVAE(nn.Module):
 
         self.features = ["mu", "log_var"]
 
-        self.kld_weight = kld_weight
-        self.beta = beta
+        # lambda_weights: dictionary matching self.objectives keys
+        # Accepts either dict or list (for backward compatibility)
+        if lambda_weights is None:
+            lambda_weights = {"reconstruction_loss": 1.0, "gradient_guided_loss": 1.0, "kld_loss": 0.00025}
+        elif isinstance(lambda_weights, list):
+            # Convert list to dict: [reconstruction_weight, gradient_guided_weight, kld_weight]
+            if len(lambda_weights) != 3:
+                raise ValueError(f"GGVAE requires 3 lambda_weights (reconstruction, gradient_guided, kld), got {len(lambda_weights)}")
+            lambda_weights = {
+                "reconstruction_loss": lambda_weights[0],
+                "gradient_guided_loss": lambda_weights[1],
+                "kld_loss": lambda_weights[2]
+            }
+        elif isinstance(lambda_weights, dict):
+            # Validate dict keys match objectives
+            expected_keys = set(self.objectives.keys())
+            provided_keys = set(lambda_weights.keys())
+            if expected_keys != provided_keys:
+                missing = expected_keys - provided_keys
+                extra = provided_keys - expected_keys
+                error_msg = f"lambda_weights keys must match objectives keys. "
+                if missing:
+                    error_msg += f"Missing: {missing}. "
+                if extra:
+                    error_msg += f"Extra: {extra}."
+                raise ValueError(error_msg)
+        else:
+            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
+        
+        self.lambda_weights = lambda_weights
         
         self.latent_dim = latent_dim
 
@@ -244,10 +279,14 @@ class GGVAE(nn.Module):
 
         recon_loss = self.objectives["reconstruction_loss"](inputs, recons)
         gradient_guided_loss = self.objectives["gradient_guided_loss"](inputs, recons)
-        kld_loss = self.beta * self.kld_weight * self.objectives["kld_loss"](mu, log_var)
+        kld_loss = self.objectives["kld_loss"](mu, log_var)
         
+        # Apply lambda_weights using dictionary keys matching self.objectives
+        weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
+        weighted_gradient_guided_loss = self.lambda_weights["gradient_guided_loss"] * gradient_guided_loss
+        weighted_kld_loss = self.lambda_weights["kld_loss"] * kld_loss
 
-        return {"reconstruction_loss": recon_loss, "gradient_guided_loss": gradient_guided_loss, "kld_loss": kld_loss}
+        return {"reconstruction_loss": weighted_recon_loss, "gradient_guided_loss": weighted_gradient_guided_loss, "kld_loss": weighted_kld_loss}
 
     def sample(self, num_samples=1, device=None):
         """

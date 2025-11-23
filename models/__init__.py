@@ -1,6 +1,7 @@
 from .vae import VAE
 from .gg_vae import GGVAE
 from .vq_vae import VQVAE
+from .gg_vq_vae import GGVQVAE
 from .vq_vae2 import VQVAE2
 from .betatc_vae import BetaTCVAE
 
@@ -12,38 +13,52 @@ def get_network(input_size, num_channels=3, args=None, device=None):
     hidden_dims = getattr(args, "hidden_dims", [32, 64, 128, 256, 512])
     recons_dist = getattr(args, "recons_dist", "gaussian")
     recons_reduction = getattr(args, "recons_reduction", "mean")
-    kld_weight = getattr(args, "kld_weight", 0.00025)
-    beta = getattr(args, "beta", 1.0)
-    alpha = getattr(args, "alpha", 1.0)
-    gamma = getattr(args, "gamma", 1.0)
-    # For BetaTCVAE, gamma defaults to 1.0 (for KLD annealing)
-    # Note: args.gamma is also used for scheduler, but they're used in different contexts
+    # Support both loss_weights (new) and lambda_weights (old) for backward compatibility
+    lambda_weights = getattr(args, "loss_weights", None) or getattr(args, "lambda_weights", None)
     anneal_steps = getattr(args, 'anneal_steps', 200)
     dataset_size = getattr(args, 'dataset_size', 50000)
     output_activation = getattr(args, 'output_activation', 'tanh')
 
     if arch.lower() == 'vae':
-        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, kld_weight=kld_weight, beta=beta, device=device)
+        # Default lambda_weights for VAE: [reconstruction, kld]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 0.00025]
+        return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'gg_vae':
-        return GGVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, kld_weight=kld_weight, beta=beta, device=device)
+        # Default lambda_weights for GGVAE: [reconstruction, gradient_guided, kld]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 1.0, 0.00025]
+        return GGVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'vq_vae':
-        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta, device=device)
+        # Default lambda_weights for VQVAE: [reconstruction, commitment, embedding]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 1.0, 1.0]
+        return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+    elif arch.lower() == 'gg_vq_vae':
+        # Default lambda_weights for GGVQVAE: [reconstruction, gradient_guided, commitment, embedding]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 1.0, 1.0, 1.0]
+        return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'vq_vae2':
-        return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, beta=beta, device=device)
+        # Default lambda_weights for VQVAE2: [reconstruction, commitment, embedding]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 1.0, 1.0]
+        return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'betatc_vae' or arch.lower() == 'btc_vae':
+        # Default lambda_weights for BetaTCVAE: [reconstruction, mi, tc, kld]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 1.0, 1.0, 1.0]
         return BetaTCVAE(
             in_channels=num_channels,
             latent_dim=latent_dim,
             hidden_dims=hidden_dims,
             anneal_steps=anneal_steps,
-            alpha=alpha,
-            beta=beta,
-            gamma=gamma,
             input_size=input_size,
             dataset_size=dataset_size,
             output_activation=output_activation,
             recons_dist=recons_dist,
             recons_reduction=recons_reduction,
+            lambda_weights=lambda_weights,
             device=device
         )
     else:

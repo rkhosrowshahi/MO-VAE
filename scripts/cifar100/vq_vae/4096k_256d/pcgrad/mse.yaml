@@ -15,7 +15,7 @@ normalize: true
 embedding_dim: 256
 num_embeddings: 4096
 hidden_dims: [128, 256]
-beta: 0.25
+loss_weights: [1.0, 1.0, 1.0]
 output_activation: tanh
 recons_dist: gaussian
 recons_reduction: mean

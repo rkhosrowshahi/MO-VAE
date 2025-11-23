@@ -1,0 +1,11 @@
+scripts/celeba/gg_vq_vae/sum/mse.yaml
+scripts/celeba/gg_vq_vae/upgrad/mse.yaml
+scripts/celeba/gg_vq_vae/aligned_mtl/mse.yaml
+scripts/celeba/gg_vq_vae/dualproj/mse.yaml
+scripts/celeba/gg_vq_vae/cagrad/mse.yaml
+scripts/celeba/gg_vq_vae/pcgrad/mse.yaml
+scripts/celeba/gg_vq_vae/imtlg/mse.yaml
+scripts/celeba/gg_vq_vae/jd_sum/mse.yaml
+scripts/celeba/gg_vq_vae/mgda/mse.yaml
+scripts/celeba/gg_vq_vae/nashmtl/mse.yaml
+

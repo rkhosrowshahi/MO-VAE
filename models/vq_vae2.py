@@ -22,12 +22,12 @@ class VQVAE2(nn.Module):
                  embedding_dim: int,
                  num_embeddings: int,
                  hidden_dims: Optional[List[int]] = [128, 256],
-                 beta: float = 0.25,
                  input_size: int = 64,
                  layer_norm: str = "none",
                  output_activation: str = "tanh",
                  recons_dist: str = "gaussian",
                  recons_reduction: str = "mean",
+                 lambda_weights: Optional[List[float]] = None,
                  device=None,
                  **kwargs) -> None:
         super(VQVAE2, self).__init__()
@@ -38,7 +38,6 @@ class VQVAE2(nn.Module):
         self.num_embeddings = num_embeddings
         self.input_size = input_size
         self.in_channels = in_channels
-        self.beta = beta
         self._summary_mode = False
         
         # Set up reconstruction objective
@@ -86,6 +85,37 @@ class VQVAE2(nn.Module):
         }
 
         self.features = ["encoding_top", "encoding_bottom"]
+
+        # lambda_weights: dictionary matching self.objectives keys
+        # Accepts either dict or list (for backward compatibility)
+        if lambda_weights is None:
+            lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 1.0, "embedding_loss": 1.0}
+        elif isinstance(lambda_weights, list):
+            # Convert list to dict: [reconstruction_weight, commitment_weight, embedding_weight]
+            if len(lambda_weights) != 3:
+                raise ValueError(f"VQVAE2 requires 3 lambda_weights (reconstruction, commitment, embedding), got {len(lambda_weights)}")
+            lambda_weights = {
+                "reconstruction_loss": lambda_weights[0],
+                "commitment_loss": lambda_weights[1],
+                "embedding_loss": lambda_weights[2]
+            }
+        elif isinstance(lambda_weights, dict):
+            # Validate dict keys match objectives
+            expected_keys = set(self.objectives.keys())
+            provided_keys = set(lambda_weights.keys())
+            if expected_keys != provided_keys:
+                missing = expected_keys - provided_keys
+                extra = provided_keys - expected_keys
+                error_msg = f"lambda_weights keys must match objectives keys. "
+                if missing:
+                    error_msg += f"Missing: {missing}. "
+                if extra:
+                    error_msg += f"Extra: {extra}."
+                raise ValueError(error_msg)
+        else:
+            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
+        
+        self.lambda_weights = lambda_weights
 
         # Setup output activation
         if output_activation == "tanh":
@@ -158,8 +188,8 @@ class VQVAE2(nn.Module):
         self.enc_top = nn.Sequential(*modules)
 
         # --- Vector Quantizers ---
-        self.vq_bottom = VectorQuantizer(num_embeddings, embedding_dim, self.beta)
-        self.vq_top = VectorQuantizer(num_embeddings, embedding_dim, self.beta)
+        self.vq_bottom = VectorQuantizer(num_embeddings, embedding_dim)
+        self.vq_top = VectorQuantizer(num_embeddings, embedding_dim)
         
         # Projection for bottom before VQ
         self.bottom_pre_vq = nn.Conv2d(self.bottom_dim, embedding_dim, kernel_size=1)
@@ -306,13 +336,18 @@ class VQVAE2(nn.Module):
     def loss_function(self, inputs, args: dict) -> dict:
         recons = args["recons"]
         commitment_loss = args["commitment_loss"]
-        embedding_loss = self.beta * args["embedding_loss"]
-        recon_loss = self.recon_obj(recons, inputs)
+        embedding_loss = args["embedding_loss"]
+        recon_loss = self.recon_obj(inputs, recons)
+        
+        # Apply lambda_weights using dictionary keys matching self.objectives
+        weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
+        weighted_commitment_loss = self.lambda_weights["commitment_loss"] * commitment_loss
+        weighted_embedding_loss = self.lambda_weights["embedding_loss"] * embedding_loss
         
         return {
-            "reconstruction_loss": recon_loss,
-            "commitment_loss": commitment_loss,
-            "embedding_loss": embedding_loss,
+            "reconstruction_loss": weighted_recon_loss,
+            "commitment_loss": weighted_commitment_loss,
+            "embedding_loss": weighted_embedding_loss,
         }
 
     def sample(self, num_samples=1, device=None):

@@ -3,7 +3,7 @@
 
 dataset: CelebA
 arch: gg_vq_vae
-epochs: 10
+epochs: 100
 batch_size: 128
 optimizer: adam
 lr: 3e-4
@@ -25,7 +25,8 @@ seed: 42
 num_workers: 4
 device: cuda:0
 save_path: logs/
-save_freq: 2
+save_freq: 10
+eval_freq: 10
 num_samples: 64
 
 # Hypervolume reference points (GG-VQ-VAE has 4 objectives: reconstruction_loss, gradient_guided_loss, commitment_loss, embedding_loss)

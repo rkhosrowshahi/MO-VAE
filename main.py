@@ -651,7 +651,7 @@ if __name__ == "__main__":
     parser.add_argument("--hv_ref", type=float, nargs="+", default=[1.1, 1.1])
     parser.add_argument("--num_samples", type=int, default=64)
     parser.add_argument("--save_freq", type=int, default=10)
-    parser.add_argument("--eval_freq", type=int, default=10)
+    parser.add_argument("--eval_freq", type=int, default=1)
     parser.add_argument("--use_wandb", action="store_true")
     parser.add_argument("--wandb_project", type=str, default="mo-vae")
     parser.add_argument("--wandb_entity", type=str, default=None)

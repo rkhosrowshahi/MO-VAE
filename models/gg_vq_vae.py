@@ -15,13 +15,11 @@ class VectorQuantizer(nn.Module):
     """
     def __init__(self,
                  num_embeddings: int,
-                 embedding_dim: int,
-                 beta: float = 0.25):
+                 embedding_dim: int):
         super(VectorQuantizer, self).__init__()
 
         self.K = num_embeddings
         self.D = embedding_dim
-        self.beta = beta
         self._summary_mode = False
 
         self.embedding = nn.Embedding(self.K, self.D)
@@ -261,8 +259,7 @@ class GGVQVAE(nn.Module):
         self.encoder = nn.Sequential(*modules)
 
         self.vq_layer = VectorQuantizer(num_embeddings,
-                                        embedding_dim,
-                                        self.beta)
+                                        embedding_dim)
 
         # Build Decoder
         modules = []

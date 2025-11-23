@@ -554,17 +554,6 @@ def main(args):
 
         if scheduler is not None:
             scheduler.step()
-
-        tqdm.write(
-            f" Epoch {epoch}/{args.epochs} - Train - "
-            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in train_loss_meters.items())
-            + f", HV: {train_hv:.2e}"
-        )
-        tqdm.write(
-            f" Epoch {epoch}/{args.epochs} - Eval - "
-            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
-            + f", HV: {eval_hv:.2e}"
-        )
         
         # Save best model based on total eval loss
         current_eval_loss = eval_loss_meters['total_loss'].avg

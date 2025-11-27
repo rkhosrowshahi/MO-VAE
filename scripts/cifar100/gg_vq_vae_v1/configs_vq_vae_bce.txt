@@ -2,6 +2,7 @@ scripts/cifar100/gg_vq_vae/upgrad/bce.yaml
 scripts/cifar100/gg_vq_vae/sum/bce.yaml
 scripts/cifar100/gg_vq_vae/aligned_mtl/bce.yaml
 scripts/cifar100/gg_vq_vae/dualproj/bce.yaml
+scripts/cifar100/gg_vq_vae/jd_sum/bce.yaml
 
 
 

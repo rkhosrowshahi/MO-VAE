@@ -40,6 +40,11 @@ def get_network(input_size, num_channels=3, args=None, device=None):
         if lambda_weights is None:
             lambda_weights = [1.0, 1.0, 1.0, 1.0]
         return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+    elif arch.lower() == 'gg_vq_vae_v2':
+        # Default lambda_weights for GGVQVAE: [reconstruction, gradient_guided, commitment, embedding]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 1.0, 1.0, 1.0]
+        return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device, gradient_guided_version="v2")
     elif arch.lower() == 'vq_vae2':
         # Default lambda_weights for VQVAE2: [reconstruction, commitment, embedding]
         if lambda_weights is None:

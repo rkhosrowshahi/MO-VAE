@@ -99,6 +99,7 @@ class GGVQVAE(nn.Module):
                  recons_dist: str = "gaussian",
                  recons_reduction: str = "mean",
                  lambda_weights: Optional[List[float]] = None,
+                 gradient_guided_version: str = "v1",
                  device=None,
                  **kwargs) -> None:
         super(GGVQVAE, self).__init__()
@@ -154,6 +155,13 @@ class GGVQVAE(nn.Module):
         else:
             raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
         self.recon_obj = recon_obj
+
+        if gradient_guided_version == "v1":
+            self.gradient_guided_loss = self.gradient_guided_v1_loss
+        elif gradient_guided_version == "v2":
+            self.gradient_guided_loss = self.gradient_guided_v2_loss
+        else:
+            raise ValueError(f"Gradient guided version {gradient_guided_version} not supported. Choose from: v1, v2")
 
         sobel_x = torch.tensor([[-1., 0., 1.],
                             [-2., 0.,  2.],
@@ -346,29 +354,53 @@ class GGVQVAE(nn.Module):
             return outputs["recons"]
         return outputs
 
-    def gradient_guided_loss(self,inputs, recons):
+    def gradient_guided_v1_loss(self, inputs, recons):
         # Sobel applied to R,G,B
         x_grad = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
         y_grad = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
 
         #Gradient magnitude
-        grad_mag = torch.sqrt(x_grad**2 + y_grad**2)# (batch_size,C,H,W)
+        grad_mag = torch.sqrt(x_grad**2 + y_grad**2 + 1e-8)# (batch_size,C,H,W)
 
         # Combining across channels - take max across channels
         grad_max = torch.max(grad_mag, dim=1)[0]
 
         # Normalizing
-        grad_max = (grad_max - grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1)) / \
-                            (grad_max.view(grad_max.size(0), -1).max(1, keepdim=True)[0].unsqueeze(-1) -
-                            grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1))
+        flat = grad_max.view(grad_max.size(0), -1)
+        min_val = flat.min(1, keepdim=True)[0].unsqueeze(-1)
+        max_val = flat.max(1, keepdim=True)[0].unsqueeze(-1)
+        grad_max = (grad_max - min_val) / (max_val - min_val + 1e-8)
 
         # non-reduced reconstruction loss (B, C, H, W)
         pixel_loss = F.mse_loss(recons, inputs, reduction='none')
+        # pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')
 
         #Gradient-guided Encoder Loss
         loss_grad = (grad_max.unsqueeze(1) * pixel_loss).mean() #(batch_size, C, H, W) then mean across batch
 
         return loss_grad
+
+    def gradient_guided_v2_loss(self, inputs, recons):
+        eps = 1e-8
+        
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Edge matching: MSE (gradients are signed, unbounded)
+        edge_match_loss = F.mse_loss(recon_x, input_x) + F.mse_loss(recon_y, input_y)
+        
+        # Edge-weighted pixel loss: BCE (pixels are in [0,1])
+        input_mag = torch.sqrt(input_x**2 + input_y**2 + eps)
+        weights = input_mag.max(dim=1)[0]  # simplified
+        weights = weights / (weights.max() + eps)  # normalize to [0,1]
+        
+        pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')  # BCE here
+        weighted_pixel_loss = (weights.unsqueeze(1) * pixel_loss).mean()
+        
+        return edge_match_loss + weighted_pixel_loss
     
     def loss_function(self, inputs, args: dict) -> dict:
         """

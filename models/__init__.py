@@ -18,7 +18,6 @@ def get_network(input_size, num_channels=3, args=None, device=None):
     lambda_weights = getattr(args, "loss_weights", None) or getattr(args, "lambda_weights", None)
     anneal_steps = getattr(args, 'anneal_steps', 200)
     dataset_size = getattr(args, 'dataset_size', 50000)
-    output_activation = getattr(args, 'output_activation', 'tanh')
 
     if arch.lower() == 'vae':
         # Default lambda_weights for VAE: [reconstruction, kld]
@@ -66,7 +65,6 @@ def get_network(input_size, num_channels=3, args=None, device=None):
             anneal_steps=anneal_steps,
             input_size=input_size,
             dataset_size=dataset_size,
-            output_activation=output_activation,
             recons_dist=recons_dist,
             recons_reduction=recons_reduction,
             lambda_weights=lambda_weights,

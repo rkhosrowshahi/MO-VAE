@@ -10,3 +10,4 @@ archive/
 pyrightconfig.json
 logs/
 examples/
+.env

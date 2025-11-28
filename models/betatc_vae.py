@@ -20,7 +20,6 @@ class BetaTCVAE(nn.Module):
         anneal_steps: int = 200,
         input_size: int = 32,
         dataset_size: int = None,
-        output_activation: str = "tanh",
         recons_dist: str = "gaussian",
         recons_reduction: str = "mean",
         lambda_weights: Optional[List[float]] = None,
@@ -42,10 +41,7 @@ class BetaTCVAE(nn.Module):
             else:
                 raise ValueError(f"MSE reduction {recons_reduction} not supported. Choose from: mean, sum, scaled_sum")
 
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for gaussian
+            output_activation = "tanh"  # Default to tanh for gaussian
         elif recons_dist == "bernoulli":
             if recons_reduction == "mean":
                 recon_obj = bce_per_pixel_mean
@@ -61,10 +57,7 @@ class BetaTCVAE(nn.Module):
                 recon_obj = laplacian_per_image_sum
             else:
                  raise ValueError(f"Laplacian reduction {recons_reduction} not supported. Choose from: mean, sum")
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for laplacian
+            output_activation = "tanh"  # Default to tanh for laplacian
         else:
             raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
 

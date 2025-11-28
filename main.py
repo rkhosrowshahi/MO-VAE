@@ -2,6 +2,11 @@ import os
 import time
 from argparse import ArgumentParser
 
+# Load .env file if it exists (for WANDB_API_KEY), otherwise use existing wandb login
+if os.path.exists('.env'):
+    from dotenv import load_dotenv
+    load_dotenv()
+
 import numpy as np
 import torch
 import torch.optim as optim
@@ -641,6 +646,10 @@ def main(args):
     os.makedirs(os.path.join(save_root, "checkpoints"), exist_ok=True)
 
     if args.use_wandb:
+        # Use API key from .env if available, otherwise use existing wandb login
+        wandb_api_key = os.getenv('WANDB_API_KEY')
+        if wandb_api_key:
+            wandb.login(key=wandb_api_key)
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
@@ -854,7 +863,6 @@ if __name__ == "__main__":
     parser.add_argument("--aggregator", "--agg", type=str, default=None)
     parser.add_argument("--arch", type=str, default="vae")
     parser.add_argument("--layer_norm", type=str, default="batch")
-    parser.add_argument("--output_activation", type=str, default="tanh")
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
     parser.add_argument("--recons_dist", type=str, default="gaussian", choices=["bernoulli", "gaussian", "laplacian"], help="Reconstruction distribution: bernoulli (BCE), gaussian (MSE), or laplacian (L1)")

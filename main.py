@@ -674,43 +674,6 @@ def main(args):
             "train/lr": optimizer.param_groups[0]["lr"],
         }
 
-        if epoch % args.eval_freq == 0 or epoch in {1, args.epochs}:
-            eval_loss_meters = evaluate(net, test_loader, device=device, args=args)
-
-            # Update log_dict with all eval metrics (losses and image quality metrics)
-            log_dict.update({f"eval/{key}": meter.avg for key, meter in eval_loss_meters.items()})
-            
-            # Explicitly add image quality metrics to wandb log dict
-            if "ssim" in eval_loss_meters:
-                log_dict["eval/ssim"] = eval_loss_meters["ssim"].avg
-            if "ssnr" in eval_loss_meters:
-                log_dict["eval/ssnr"] = eval_loss_meters["ssnr"].avg
-            if "fid" in eval_loss_meters:
-                log_dict["eval/fid"] = eval_loss_meters["fid"].avg
-
-            if hv_indicator is not None:
-                eval_point = np.array([[eval_loss_meters[key].avg for key in objective_keys]])
-                eval_hv = hv_indicator(eval_point)
-                log_dict.update({"eval/hv": eval_hv})
-
-            # Format metrics for display
-            metric_strs = []
-            for key, meter in eval_loss_meters.items():
-                if key in ["ssim", "ssnr", "fid"]:
-                    if key == "fid" and np.isnan(meter.avg):
-                        metric_strs.append(f"{key}: N/A")
-                    else:
-                        metric_strs.append(f"{key}: {meter.avg:.4f}")
-                else:
-                    metric_strs.append(f"{key}: {meter.avg:.6e}")
-            
-            tqdm.write(
-                f" Epoch {epoch}/{args.epochs} - Eval - "
-                + ", ".join(metric_strs)
-                + f", HV: {eval_hv:.2e}"
-            )
-            
-
         if (epoch % args.save_freq == 0) or epoch in {1, args.epochs}:
 
             gen_path = os.path.join(save_root, "figures", "generated", f"epoch_{epoch:03d}_random_samples.pdf")
@@ -748,6 +711,42 @@ def main(args):
                 log_to_wandb=args.use_wandb,
                 epoch=epoch,
                 step=step,
+            )
+
+        if epoch % args.eval_freq == 0 or epoch in {1, args.epochs}:
+            eval_loss_meters = evaluate(net, test_loader, device=device, args=args)
+
+            # Update log_dict with all eval metrics (losses and image quality metrics)
+            log_dict.update({f"eval/{key}": meter.avg for key, meter in eval_loss_meters.items()})
+            
+            # Explicitly add image quality metrics to wandb log dict
+            if "ssim" in eval_loss_meters:
+                log_dict["eval/ssim"] = eval_loss_meters["ssim"].avg
+            if "ssnr" in eval_loss_meters:
+                log_dict["eval/ssnr"] = eval_loss_meters["ssnr"].avg
+            if "fid" in eval_loss_meters:
+                log_dict["eval/fid"] = eval_loss_meters["fid"].avg
+
+            if hv_indicator is not None:
+                eval_point = np.array([[eval_loss_meters[key].avg for key in objective_keys]])
+                eval_hv = hv_indicator(eval_point)
+                log_dict.update({"eval/hv": eval_hv})
+
+            # Format metrics for display
+            metric_strs = []
+            for key, meter in eval_loss_meters.items():
+                if key in ["ssim", "ssnr", "fid"]:
+                    if key == "fid" and np.isnan(meter.avg):
+                        metric_strs.append(f"{key}: N/A")
+                    else:
+                        metric_strs.append(f"{key}: {meter.avg:.4f}")
+                else:
+                    metric_strs.append(f"{key}: {meter.avg:.6e}")
+            
+            tqdm.write(
+                f" Epoch {epoch}/{args.epochs} - Eval - "
+                + ", ".join(metric_strs)
+                + f", HV: {eval_hv:.2e}"
             )
 
         if args.use_wandb:

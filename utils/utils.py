@@ -3,24 +3,69 @@ import torch
 from torchvision import datasets, transforms
 
 def set_seed(seed):
+    """
+    Set random seed for reproducibility.
+    
+    Sets the random seed for NumPy, PyTorch CPU operations, and all CUDA devices
+    to ensure reproducible results across runs.
+    
+    Args:
+        seed: Integer seed value to use for all random number generators
+        
+    Returns:
+        None
+    """
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
 class AverageMeter:
+    """
+    Computes and stores the average and current value of a metric.
+    
+    Useful for tracking metrics during training/evaluation, such as loss values
+    or accuracy scores. Maintains running statistics that can be updated incrementally.
+    """
     def __init__(self):
+        """Initialize the meter with zero values."""
         self.reset()
+        
     def reset(self):
+        """
+        Reset all statistics to zero.
+        
+        Returns:
+            None
+        """
         self.val = 0
         self.avg = 0
         self.sum = 0
         self.count = 0
+        
     def update(self, val, n=1):
+        """
+        Update statistics with a new value.
+        
+        Args:
+            val: New value to add to the running average
+            n: Number of samples this value represents (default: 1)
+               Useful when val is already an average over n samples
+        
+        Returns:
+            None
+        """
         self.val = val
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+        
     def __str__(self):
+        """
+        String representation of the average value.
+        
+        Returns:
+            str: Formatted average value with 4 decimal places
+        """
         return f"{self.avg:.4f}"
 
 class MyCelebA(datasets.CelebA):
@@ -36,6 +81,39 @@ class MyCelebA(datasets.CelebA):
 
 
 def get_dataset(dataset_name, data_dir='./data', normalize=False):
+    """
+    Load and prepare a dataset for training/evaluation.
+    
+    Supports CIFAR-10, CIFAR-100, ImageNet, and CelebA datasets. Applies appropriate
+    transforms including data augmentation for training sets and optional normalization.
+    
+    Args:
+        dataset_name: Name of the dataset. Supported values:
+                     - 'CIFAR10': CIFAR-10 dataset (32x32 images, 10 classes)
+                     - 'CIFAR100': CIFAR-100 dataset (32x32 images, 100 classes)
+                     - 'ImageNet': ImageNet dataset (224x224 images, 1000 classes)
+                     - 'CelebA': CelebA face dataset (64x64 images)
+        data_dir: Root directory where datasets are stored or will be downloaded.
+                 Default is './data'.
+        normalize: If True, applies normalization transforms using dataset-specific
+                  mean and std values. Default is False.
+        
+    Returns:
+        tuple: (train_dataset, test_dataset, input_size)
+            - train_dataset: PyTorch Dataset object for training
+            - test_dataset: PyTorch Dataset object for testing/validation
+            - input_size: Integer size of input images (e.g., 32 for CIFAR, 224 for ImageNet)
+            
+    Raises:
+        ValueError: If dataset_name is not one of the supported datasets
+        
+    Note:
+        - CIFAR-10/100 and ImageNet will be automatically downloaded if not present
+        - CelebA requires manual download (see MyCelebA class docstring)
+        - Training sets include random horizontal flip augmentation
+        - All datasets are converted to tensors with values in [0, 1]
+        - If normalize=True, values are normalized to approximately [-1, 1] range
+    """
     if dataset_name.lower() == 'cifar10':
         # CIFAR-10 normalization values
         # Mean and std calculated from CIFAR-10 training set

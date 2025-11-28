@@ -1,9 +1,21 @@
 # MO-VAE
-![Generated random samples](figures/cifar10/aligned_mtl/random_samples.png)
-![Reconstructed test samples](figures/cifar10/aligned_mtl/test_samples.png)
-![Reconstructed test samples](figures/cifar10/aligned_mtl/train_samples.png)
+
 A multi-objective representation learning approach for variational autoencoders that stabilizes gradients by decomposing the evidence lower bound (ELBO) into two complementary objectives.
 We explore a suite of multi-task gradient aggregation strategies—such as AlignedMTL, PCGrad, MGDA, and NashMTL—to jointly optimize the reconstruction error and KL divergence while keeping their gradient updates conflict-free.
+
+## Results
+
+### CelebA VQ-VAE
+
+| Sum (Baseline) | UPGrad | AlignedMTL |
+|:--------------:|:------:|:----------:|
+| ![Sum](figures/celeba/vq_vae/sum.png) | ![UPGrad](figures/celeba/vq_vae/upgrad.png) | ![AMTL](figures/celeba/vq_vae/amtl.png) |
+
+### CIFAR100 VQ-VAE
+
+| Sum (Baseline) | UPGrad | AlignedMTL |
+|:--------------:|:------:|:----------:|
+| ![Sum](figures/cifar100/vq_vae/sum.png) | ![UPGrad](figures/cifar100/vq_vae/upgrad.png) | ![AMTL](figures/cifar100/vq_vae/amtl.png) |
 ## Installation
 * Close the repository
 ```

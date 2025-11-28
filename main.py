@@ -62,6 +62,7 @@ import scienceplots
 from torchvision.utils import make_grid
 
 from utils.utils import AverageMeter, get_dataset, set_seed
+from utils.metrics import ssim, ssnr, calculate_fid
 from models import get_network
 
 plt.style.use(["science", "ieee", "no-latex"])
@@ -71,7 +72,21 @@ _current_step = 0
 
 
 def print_weights(_, __, weights: torch.Tensor) -> None:
-    """Prints the extracted weights."""
+    """
+    Hook function to log task weights from multi-task learning aggregator.
+    
+    This function is registered as a forward hook on the aggregator's weighting
+    module to track how weights are assigned to different tasks during training.
+    The weights are logged to wandb for visualization.
+    
+    Args:
+        _: Module instance (unused, required by hook signature)
+        __: Input to the module (unused, required by hook signature)
+        weights: Tensor of shape (num_tasks,) containing the weight for each task
+        
+    Returns:
+        None
+    """
     global _current_step
     # print(f"Weights: {weights}")
     if wandb.run is not None:
@@ -80,7 +95,22 @@ def print_weights(_, __, weights: torch.Tensor) -> None:
 
 
 def print_gd_similarity(_, inputs: tuple[torch.Tensor, ...], weights: torch.Tensor) -> None:
-    """Prints the cosine similarity between the weighted aggregation and the average gradient."""
+    """
+    Hook function to compute and log cosine similarity between weighted and mean gradients.
+    
+    This function is registered as a forward hook to monitor how similar the weighted
+    aggregated gradient (from multi-task learning) is to the simple average gradient.
+    Higher similarity indicates the aggregator is producing gradients close to uniform
+    averaging, while lower similarity suggests more task-specific weighting.
+    
+    Args:
+        _: Module instance (unused, required by hook signature)
+        inputs: Tuple containing gradient matrix of shape (num_tasks, num_params)
+        weights: Tensor of shape (num_tasks,) containing task weights
+        
+    Returns:
+        None
+    """
     global _current_step
     matrix = inputs[0]
     # Compute mean gradient (simple average across tasks)
@@ -96,6 +126,27 @@ def print_gd_similarity(_, inputs: tuple[torch.Tensor, ...], weights: torch.Tens
 
 
 def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
+    """
+    Train the model for one epoch.
+    
+    Performs a full training pass over the dataset, computing losses, applying
+    multi-task learning aggregation if specified, and updating model parameters.
+    Tracks all loss components and logs them to wandb if enabled.
+    
+    Args:
+        net: The neural network model to train
+        train_loader: DataLoader for training data
+        optimizer: Optimizer for parameter updates
+        aggregator: Multi-task learning aggregator (None, "sum", or aggregator object)
+        step: Current global training step (will be updated)
+        device: Device to run training on (e.g., 'cuda:0' or 'cpu')
+        args: Configuration object containing training hyperparameters
+        
+    Returns:
+        tuple: (loss_meters, updated_step)
+            - loss_meters: Dictionary mapping loss names to AverageMeter objects
+            - updated_step: Updated global step counter after this epoch
+    """
     net.train()
     loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
     loss_meters["total_loss"] = AverageMeter()
@@ -208,9 +259,38 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
 
 
 def evaluate(net, data_loader, device, args):
+    """
+    Evaluate the model on a dataset.
+    
+    Computes loss metrics and image quality metrics (SSIM, SSNR, FID) on the
+    provided dataset. The model is set to evaluation mode and gradients are
+    disabled for efficiency.
+    
+    Args:
+        net: The neural network model to evaluate
+        data_loader: DataLoader for evaluation data
+        device: Device to run evaluation on (e.g., 'cuda:0' or 'cpu')
+        args: Configuration object containing evaluation settings
+            - max_fid_samples: Maximum number of samples to use for FID computation
+            
+    Returns:
+        dict: Dictionary mapping metric names to AverageMeter objects containing:
+            - All loss components (e.g., 'reconstruction_loss', 'kl_loss', 'total_loss')
+            - 'ssim': Structural Similarity Index (higher is better, range 0-1)
+            - 'ssnr': Signal-to-Noise Ratio in dB (higher is better)
+            - 'fid': Fréchet Inception Distance (lower is better, lower bound is 0)
+    """
     net.eval()
     loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
     loss_meters["total_loss"] = AverageMeter()
+    
+    # Metrics meters
+    ssim_meter = AverageMeter()
+    ssnr_meter = AverageMeter()
+    
+    # Collect images for FID computation
+    all_real_images = []
+    all_recon_images = []
 
     with torch.no_grad():
         for images, _ in data_loader:
@@ -222,11 +302,72 @@ def evaluate(net, data_loader, device, args):
             loss_meters["total_loss"].update(total_loss.item())
             for key, value in loss_dict.items():
                 loss_meters[key].update(value.item())
+            
+            # Compute SSIM and SSNR
+            recons = outputs.get("recons")
+            if recons is not None:
+                # Compute SSIM per batch
+                batch_ssim = ssim(images, recons, size_average=True)
+                ssim_meter.update(batch_ssim.item(), n=images.size(0))
+                
+                # Compute SSNR per batch
+                batch_ssnr = ssnr(images, recons)
+                ssnr_meter.update(batch_ssnr, n=images.size(0))
+                
+                # Collect images for FID (limit to avoid memory issues)
+                max_fid_samples = args.max_fid_samples
+                current_samples = sum(img.size(0) for img in all_real_images)
+                if current_samples + images.size(0) <= max_fid_samples:
+                    all_real_images.append(images.cpu())
+                    all_recon_images.append(recons.cpu())
+
+    # Compute FID if we have collected images
+    # Note: FID is a distance/error metric (lower is better), unlike SSIM/SSNR (higher is better)
+    fid_distance = float('nan')
+    if len(all_real_images) > 0:
+        try:
+            all_real = torch.cat(all_real_images, dim=0)
+            all_recon = torch.cat(all_recon_images, dim=0)
+            # Limit to same number of samples for fair comparison
+            min_samples = min(len(all_real), len(all_recon), max_fid_samples)
+            all_real = all_real[:min_samples]
+            all_recon = all_recon[:min_samples]
+            fid_distance = calculate_fid(all_real, all_recon, device=device, batch_size=50)
+        except Exception as e:
+            tqdm.write(f"Warning: FID computation failed: {e}")
+            fid_distance = float('nan')
+    
+    # Add metrics to loss_meters for consistent return format
+    # SSIM: similarity score (higher is better, range 0-1)
+    # SSNR: signal-to-noise ratio in dB (higher is better)
+    # FID: Fréchet Inception Distance (lower is better, lower bound is 0)
+    loss_meters["ssim"] = ssim_meter
+    loss_meters["ssnr"] = ssnr_meter
+    loss_meters["fid"] = AverageMeter()
+    loss_meters["fid"].update(fid_distance)
 
     return loss_meters
 
 
 def generate_random_samples(net, num_samples, device, save_path=None, log_to_wandb=False, epoch=None, step=None):
+    """
+    Generate random samples from the model's latent space.
+    
+    Samples random latent vectors and decodes them to generate new images.
+    Optionally saves the samples as a grid image and logs to wandb.
+    
+    Args:
+        net: The neural network model (must have a sample() method)
+        num_samples: Number of random samples to generate
+        device: Device to run generation on (e.g., 'cuda:0' or 'cpu')
+        save_path: Optional path to save the generated samples grid image
+        log_to_wandb: Whether to log the samples to wandb
+        epoch: Current epoch number (for logging)
+        step: Current global step (for logging)
+        
+    Returns:
+        torch.Tensor: Generated samples tensor of shape (num_samples, C, H, W)
+    """
     samples = net.sample(num_samples=num_samples, device=device)
     grid = make_grid(samples, nrow=int(np.sqrt(num_samples)), normalize=True)
 
@@ -259,6 +400,32 @@ def generate_reconstructed_samples(
     epoch=None,
     step=None,
 ):
+    """
+    Generate reconstruction samples from a dataset.
+    
+    Takes images from the provided data loader, passes them through the model,
+    and creates a side-by-side comparison grid of originals and reconstructions.
+    Optionally saves the grid and logs to wandb.
+    
+    Args:
+        net: The neural network model to use for reconstruction
+        split_name: Name of the dataset split (e.g., 'train', 'test') for labeling
+        loader: DataLoader containing images to reconstruct
+        num_samples: Number of samples to reconstruct and display
+        device: Device to run reconstruction on (e.g., 'cuda:0' or 'cpu')
+        save_path: Optional path to save the comparison grid image
+        log_to_wandb: Whether to log the samples to wandb
+        epoch: Current epoch number (for logging)
+        step: Current global step (for logging)
+        
+    Returns:
+        tuple: (originals, reconstructions)
+            - originals: Tensor of original images (num_samples, C, H, W)
+            - reconstructions: Tensor of reconstructed images (num_samples, C, H, W)
+            
+    Raises:
+        KeyError: If model output dictionary doesn't contain 'recons' key
+    """
     net.eval()
     originals, reconstructions = [], []
 
@@ -313,6 +480,22 @@ def generate_reconstructed_samples(
 
 
 def build_hv_indicator(objective_keys, args):
+    """
+    Build a Hypervolume (HV) indicator for multi-objective optimization evaluation.
+    
+    The hypervolume indicator measures the volume of the objective space dominated
+    by a solution set. It's used to evaluate the quality of solutions in multi-objective
+    optimization problems. Requires at least 2 objectives to compute.
+    
+    Args:
+        objective_keys: Iterable of objective/loss names (e.g., ['reconstruction_loss', 'kl_loss'])
+        args: Configuration object that may contain:
+            - hv_ref: List of reference point values for each objective (optional)
+                     If not provided, defaults to 1.1 for all objectives
+            
+    Returns:
+        HV: Hypervolume indicator object from pymoo, or None if fewer than 2 objectives
+    """
     if len(objective_keys) < 2:
         return None
 
@@ -344,6 +527,44 @@ def build_hv_indicator(objective_keys, args):
 
 
 def main(args):
+    """
+    Main training loop for multi-objective variational autoencoder.
+    
+    Sets up datasets, model, optimizer, scheduler, and multi-task learning aggregator.
+    Runs training for the specified number of epochs, evaluates periodically, generates
+    samples, and saves checkpoints. Supports various aggregators for multi-task learning
+    and logs metrics to wandb if enabled.
+    
+    Args:
+        args: Configuration object containing all training hyperparameters:
+            - device: Device to use ('cuda:X' or 'cpu')
+            - dataset: Dataset name ('CIFAR10', 'CIFAR100', 'CelebA', 'ImageNet')
+            - data_dir: Directory containing datasets
+            - save_path: Root directory for saving logs and checkpoints
+            - epochs: Number of training epochs
+            - batch_size: Training batch size
+            - aggregator: Multi-task learning aggregator name (e.g., 'upgrad', 'pcgrad', 'sum')
+            - arch: Model architecture name
+            - optimizer: Optimizer name ('adam', 'sgd', 'adamw', 'rmsprop')
+            - lr: Learning rate
+            - scheduler: Learning rate scheduler ('cosine', 'multi_step', or None)
+            - use_wandb: Whether to use wandb for logging
+            - wandb_project: Wandb project name
+            - eval_freq: Frequency of evaluation (every N epochs)
+            - save_freq: Frequency of saving samples (every N epochs)
+            - num_samples: Number of samples to generate for visualization
+            - max_fid_samples: Maximum samples for FID computation
+            - And other model/training specific parameters
+            
+    Returns:
+        None
+        
+    Side Effects:
+        - Creates directory structure for saving logs and checkpoints
+        - Initializes wandb run if use_wandb is True
+        - Saves model checkpoints and generated samples
+        - Logs metrics to wandb if enabled
+    """
     device = torch.device(args.device)
 
     train_dataset, test_dataset, input_size = get_dataset(args.dataset, data_dir=args.data_dir, normalize=args.normalize)
@@ -494,21 +715,39 @@ def main(args):
         if epoch % args.eval_freq == 0 or epoch in {1, args.epochs}:
             eval_loss_meters = evaluate(net, test_loader, device=device, args=args)
 
+            # Update log_dict with all eval metrics (losses and image quality metrics)
             log_dict.update({f"eval/{key}": meter.avg for key, meter in eval_loss_meters.items()})
+            
+            # Explicitly add image quality metrics to wandb log dict
+            if "ssim" in eval_loss_meters:
+                log_dict["eval/ssim"] = eval_loss_meters["ssim"].avg
+            if "ssnr" in eval_loss_meters:
+                log_dict["eval/ssnr"] = eval_loss_meters["ssnr"].avg
+            if "fid" in eval_loss_meters:
+                log_dict["eval/fid"] = eval_loss_meters["fid"].avg
 
             if hv_indicator is not None:
                 eval_point = np.array([[eval_loss_meters[key].avg for key in objective_keys]])
                 eval_hv = hv_indicator(eval_point)
-            else:
-                eval_hv = float("nan")
+                log_dict.update({"eval/hv": eval_hv})
+
+            # Format metrics for display
+            metric_strs = []
+            for key, meter in eval_loss_meters.items():
+                if key in ["ssim", "ssnr", "fid"]:
+                    if key == "fid" and np.isnan(meter.avg):
+                        metric_strs.append(f"{key}: N/A")
+                    else:
+                        metric_strs.append(f"{key}: {meter.avg:.4f}")
+                else:
+                    metric_strs.append(f"{key}: {meter.avg:.6e}")
             
             tqdm.write(
                 f" Epoch {epoch}/{args.epochs} - Eval - "
-                + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
+                + ", ".join(metric_strs)
                 + f", HV: {eval_hv:.2e}"
             )
-
-            log_dict.update({"eval/hv": eval_hv})
+            
 
         if (epoch % args.save_freq == 0) or epoch in {1, args.epochs}:
 
@@ -658,6 +897,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_entity", type=str, default=None)
     parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument("--wandb_tags", type=str, nargs="+", default=None)
+    parser.add_argument("--max_fid_samples", type=int, default=5000, help="Maximum number of samples to use for FID computation")
 
     args = parser.parse_args()
     if args.seed is not None:

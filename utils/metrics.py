@@ -4,7 +4,7 @@ Image quality metrics for evaluation: SSIM, SSNR, and FID
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import inception_v3
+from torchvision.models import inception_v3, Inception_V3_Weights
 import numpy as np
 from scipy import linalg
 
@@ -149,7 +149,7 @@ class InceptionV3(nn.Module):
         """
         super(InceptionV3, self).__init__()
         self.device = device
-        inception = inception_v3(pretrained=True, transform_input=False)
+        inception = inception_v3(weights=Inception_V3_Weights.DEFAULT, transform_input=False)
         inception.fc = nn.Identity()
         inception.eval()
         self.model = inception.to(device)

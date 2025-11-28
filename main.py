@@ -501,27 +501,11 @@ def build_hv_indicator(objective_keys, args):
 
     num_objectives = len(objective_keys)
     
-    # Use hv_ref list if provided and has correct length
+    # Use hv_ref list if provided and has correct length, otherwise default to 1.1 for all objectives
     if hasattr(args, 'hv_ref') and args.hv_ref is not None and len(args.hv_ref) == num_objectives:
         ref_point = args.hv_ref
     else:
-        # Default reference points based on objective type
-        ref_point = []
-        for key in objective_keys:
-            if key == "reconstruction_loss":
-                ref_point.append(1.1)
-            elif key == "kl_loss" or key == "kld":
-                ref_point.append(1.1)
-            elif key == "mi_loss":
-                ref_point.append(1.1)
-            elif key == "tc_loss":
-                ref_point.append(1.1)
-            elif key == "commitment_loss":
-                ref_point.append(1.1)
-            elif key == "embedding_loss":
-                ref_point.append(1.1)
-            else:
-                ref_point.append(1.1)  # Default for unknown objectives
+        ref_point = [1.1] * num_objectives
 
     return HV(ref_point=np.array(ref_point))
 

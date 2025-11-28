@@ -60,7 +60,7 @@ class VectorQuantizer(nn.Module):
         if getattr(self, "_summary_mode", False):
             return quantized_latents
 
-        return quantized_latents, commitment_loss, embedding_loss
+        return quantized_latents, embedding_loss, commitment_loss
 
 
 class ResidualLayer(nn.Module):
@@ -167,7 +167,7 @@ class GGVQVAE(nn.Module):
         self.register_buffer('sobel_x', sobel_x.expand(3, 1, 3, 3))
         self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3))
 
-        self.objectives = {"reconstruction_loss": recon_obj, "commitment_loss": None, "embedding_loss": None}
+        self.objectives = {"reconstruction_loss": recon_obj, "embedding_loss": None, "commitment_loss": None}
         
         if version == "v1":
             self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
@@ -186,39 +186,39 @@ class GGVQVAE(nn.Module):
         if lambda_weights is None:
             # Default weights based on version
             if version == "v1":
-                lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 0.25, "embedding_loss": 1.0, "gradient_guided_loss": 1.0}
+                lambda_weights = {"reconstruction_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "gradient_guided_loss": 1.0}
             elif version == "v2":
-                lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 0.25, "embedding_loss": 1.0, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
+                lambda_weights = {"reconstruction_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
             elif version == "v3":
-                lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 0.25, "embedding_loss": 1.0, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
+                lambda_weights = {"reconstruction_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
         elif isinstance(lambda_weights, list):
             # Convert list to dict based on version
             if version == "v1":
                 if len(lambda_weights) != 4:
-                    raise ValueError(f"GGVQVAE v1 requires 4 lambda_weights (reconstruction, commitment, embedding, gradient_guided), got {len(lambda_weights)}")
+                    raise ValueError(f"GGVQVAE v1 requires 4 lambda_weights (reconstruction, embedding, commitment, gradient_guided), got {len(lambda_weights)}")
                 lambda_weights = {
                     "reconstruction_loss": lambda_weights[0],
-                    "commitment_loss": lambda_weights[1],
-                    "embedding_loss": lambda_weights[2],
+                    "embedding_loss": lambda_weights[1],
+                    "commitment_loss": lambda_weights[2],
                     "gradient_guided_loss": lambda_weights[3]
                 }
             elif version == "v2":
                 if len(lambda_weights) != 5:
-                    raise ValueError(f"GGVQVAE v2 requires 5 lambda_weights (reconstruction, commitment, embedding, gradient_guided, edge_matching), got {len(lambda_weights)}")
+                    raise ValueError(f"GGVQVAE v2 requires 5 lambda_weights (reconstruction, embedding, commitment, gradient_guided, edge_matching), got {len(lambda_weights)}")
                 lambda_weights = {
                     "reconstruction_loss": lambda_weights[0],
-                    "commitment_loss": lambda_weights[1],
-                    "embedding_loss": lambda_weights[2],
+                    "embedding_loss": lambda_weights[1],
+                    "commitment_loss": lambda_weights[2],
                     "gradient_guided_loss": lambda_weights[3],
                     "edge_matching_loss": lambda_weights[4]
                 }
             elif version == "v3":
                 if len(lambda_weights) != 5:
-                    raise ValueError(f"GGVQVAE v3 requires 5 lambda_weights (reconstruction, commitment, embedding, gradient_guided, edge_matching), got {len(lambda_weights)}")
+                    raise ValueError(f"GGVQVAE v3 requires 5 lambda_weights (reconstruction, embedding, commitment, gradient_guided, edge_matching), got {len(lambda_weights)}")
                 lambda_weights = {
                     "reconstruction_loss": lambda_weights[0],
-                    "commitment_loss": lambda_weights[1],
-                    "embedding_loss": lambda_weights[2],
+                    "embedding_loss": lambda_weights[1],
+                    "commitment_loss": lambda_weights[2],
                     "gradient_guided_loss": lambda_weights[3],
                     "edge_matching_loss": lambda_weights[4]
                 }
@@ -358,17 +358,17 @@ class GGVQVAE(nn.Module):
         vq_outputs = self.vq_layer(encoding)
 
         if isinstance(vq_outputs, tuple):
-            quantized_inputs, commitment_loss, embedding_loss = vq_outputs
+            quantized_inputs, embedding_loss, commitment_loss = vq_outputs
         else:
             quantized_inputs = vq_outputs
-            commitment_loss, embedding_loss = None, None
+            embedding_loss, commitment_loss = None, None
 
         outputs = {
             "recons": self.decode(quantized_inputs),
             "quantized_inputs": quantized_inputs,
             "encoding": encoding,
-            "commitment_loss": commitment_loss,
             "embedding_loss": embedding_loss,
+            "commitment_loss": commitment_loss,
         }
         if getattr(self, "_summary_mode", False):
             return outputs["recons"]
@@ -473,38 +473,6 @@ class GGVQVAE(nn.Module):
             loss_dict[key] = self.lambda_weights[key] * weighted_loss
 
         return loss_dict
-
-    def get_code_indices(self, input: Tensor) -> Tensor:
-        """
-        Extract discrete code indices from input.
-        Used for training PixelCNN prior.
-        
-        Args:
-            input: [B, C, H, W] input images
-        
-        Returns:
-            Tensor of discrete code indices [B, H_latent, W_latent]
-        """
-        self.eval()
-        with torch.no_grad():
-            # Encode
-            encoding = self.encode(input)
-            
-            # Get code indices
-            encoding_perm = encoding.permute(0, 2, 3, 1).contiguous()
-            flat_encoding = encoding_perm.view(-1, self.embedding_dim)
-            
-            # Compute distances to codebook
-            dist = torch.sum(flat_encoding ** 2, dim=1, keepdim=True) + \
-                   torch.sum(self.vq_layer.embedding.weight ** 2, dim=1) - \
-                   2 * torch.matmul(flat_encoding, self.vq_layer.embedding.weight.t())
-            indices = torch.argmin(dist, dim=1)
-            
-            # Reshape to spatial dimensions
-            B = input.size(0)
-            indices = indices.view(B, self.latent_spatial_dim, self.latent_spatial_dim)
-            
-        return indices
 
     def sample(self, num_samples=1, device=None):
         """

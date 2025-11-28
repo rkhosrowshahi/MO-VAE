@@ -117,57 +117,57 @@ python main.py --dataset cifar100 --arch vae --epochs 100 --agg upgrad ...
 
 * Train VAE on CIFAR100 with jd_sum
 ```
-python main.py --dataset cifar100 --arch vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VAE CIFAR100 jd_sum"
+python main.py --dataset cifar100 --arch vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CIFAR100 jd_sum"
 ```
 * Train VAE on CIFAR100 with UPGrad
 ```
-python main.py --dataset cifar100 --arch vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VAE CIFAR100 upgrad"
+python main.py --dataset cifar100 --arch vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CIFAR100 upgrad"
 ```
 * Train VAE on CelebA with jd_sum
 ```
-python main.py --dataset celeba --arch vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VAE CelebA jd_sum"
+python main.py --dataset celeba --arch vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CelebA jd_sum"
 ```
 * Train VAE on CelebA with UPGrad
 ```
-python main.py --dataset celeba --arch vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VAE CelebA upgrad"
+python main.py --dataset celeba --arch vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CelebA upgrad"
 ```
 
 ### Beta TC-VAE
 
 * Train Beta TC-VAE on CIFAR100 with jd_sum
 ```
-python main.py --dataset cifar100 --arch betatc_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "BetaTCVAE CIFAR100 jd_sum"
+python main.py --dataset cifar100 --arch betatc_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CIFAR100 jd_sum"
 ```
 * Train Beta TC-VAE on CIFAR100 with UPGrad
 ```
-python main.py --dataset cifar100 --arch betatc_vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "BetaTCVAE CIFAR100 upgrad"
+python main.py --dataset cifar100 --arch betatc_vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CIFAR100 upgrad"
 ```
 * Train Beta TC-VAE on CelebA with jd_sum
 ```
-python main.py --dataset celeba --arch betatc_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "BetaTCVAE CelebA jd_sum"
+python main.py --dataset celeba --arch betatc_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CelebA jd_sum"
 ```
 * Train Beta TC-VAE on CelebA with UPGrad
 ```
-python main.py --dataset celeba --arch betatc_vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "BetaTCVAE CelebA upgrad"
+python main.py --dataset celeba --arch betatc_vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CelebA upgrad"
 ```
 
 ### VQ-VAE
 
 * Train VQ-VAE on CIFAR100 with jd_sum
 ```
-python main.py --dataset cifar100 --arch vq_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VQ-VAE CIFAR100 jd_sum"
+python main.py --dataset cifar100 --arch vq_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CIFAR100 jd_sum"
 ```
 * Train VQ-VAE on CIFAR100 with UPGrad
 ```
-python main.py --dataset cifar100 --arch vq_vae --epochs 100 --agg upgrad --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VQ-VAE CIFAR100 upgrad"
+python main.py --dataset cifar100 --arch vq_vae --epochs 100 --agg upgrad --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CIFAR100 upgrad"
 ```
 * Train VQ-VAE on CelebA with jd_sum
 ```
-python main.py --dataset celeba --arch vq_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VQ-VAE CelebA jd_sum"
+python main.py --dataset celeba --arch vq_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CelebA jd_sum"
 ```
 * Train VQ-VAE on CelebA with UPGrad
 ```
-python main.py --dataset celeba --arch vq_vae --epochs 100 --agg upgrad --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --normalize --use_wandb --wandb_name "VQ-VAE CelebA upgrad"
+python main.py --dataset celeba --arch vq_vae --epochs 100 --agg upgrad --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CelebA upgrad"
 ```
 <!-- CONTACT -->
 ## Contact

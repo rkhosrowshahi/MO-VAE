@@ -1,7 +1,7 @@
-# CIFAR100 GG-VQ-VAE Configuration - Sum Aggregator (BCE)
-# This configuration trains a GG-VQ-VAE on CIFAR100 dataset with BCE mean objectives
+# CelebA GG-VQ-VAE Configuration - Sum Aggregator (BCE)
+# This configuration trains a GG-VQ-VAE on CelebA dataset with BCE mean objectives
 
-dataset: cifar100
+dataset: CelebA
 arch: gg_vq_vae
 epochs: 100
 batch_size: 128
@@ -34,7 +34,7 @@ hv_ref: [1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "cifar100 gg_vq_vae 512k 64d bce (& bce in gg) sum"
+wandb_name: "celeba gg_vq_vae 512k 64d bce (& bce in gg) sum"
 
 
 

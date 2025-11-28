@@ -37,7 +37,7 @@ hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "cifar100 gg_vq_vae_v3 sum bernoulli 512k 64d seed42"
+wandb_name: "celeba gg_vq_vae_v3 sum bernoulli 512k 64d seed42"
 
 
 

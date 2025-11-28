@@ -1,5 +1,5 @@
 # CelebA GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
-# This configuration trains a GG-VQ-VAE on CIFAR100 dataset with BCE mean objectives
+# This configuration trains a GG-VQ-VAE on CelebA dataset with BCE mean objectives
 
 dataset: CelebA
 data_dir: ../data
@@ -36,6 +36,6 @@ hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "cifar100 gg_vq_vae_v3 upgrad bernoulli 512k 64d seed42"
+wandb_name: "celeba gg_vq_vae_v3 upgrad bernoulli 512k 64d seed42"
 
 

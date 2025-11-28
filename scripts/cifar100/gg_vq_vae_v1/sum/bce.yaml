@@ -16,7 +16,6 @@ embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
 loss_weights: [0.307692, 0.307692, 0.076923, 0.307692]
-output_activation: sigmoid
 recons_dist: bernoulli
 recons_reduction: mean
 

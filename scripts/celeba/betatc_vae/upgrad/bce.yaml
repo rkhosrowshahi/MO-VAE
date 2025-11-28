@@ -19,6 +19,8 @@ hidden_dims: [32, 32, 64, 64]
 loss_weights: [1.0, 1.0, 6.0, 1.0]
 # BetaTC-VAE specific parameters
 anneal_steps: 10000
+recons_dist: bernoulli
+recons_reduction: mean
 
 # Training settings
 seed: 42

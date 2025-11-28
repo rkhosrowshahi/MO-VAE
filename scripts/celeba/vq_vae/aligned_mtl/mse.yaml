@@ -16,7 +16,6 @@ embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
 loss_weights: [1.0, 1.0, 0.25]
-output_activation: tanh
 recons_dist: gaussian
 recons_reduction: mean
 

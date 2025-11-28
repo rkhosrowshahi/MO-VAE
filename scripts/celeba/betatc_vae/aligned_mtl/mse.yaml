@@ -16,7 +16,6 @@ latent_dim: 128
 hidden_dims: [32, 32, 64, 64]
 loss_weights: [1.0, 1.0, 6.0, 1.0]
 anneal_steps: 10000
-output_activation: tanh
 recons_dist: gaussian
 recons_reduction: mean
 

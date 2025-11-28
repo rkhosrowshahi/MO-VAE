@@ -181,10 +181,64 @@ class GGVQVAE(nn.Module):
         else:
             raise ValueError(f"Version {version} not supported. Choose from: v1, v2, v3")
 
-        if len(lambda_weights) != len(self.objectives):
-            raise ValueError(f"lambda_weights must have the same length as the number of objectives, got {len(lambda_weights)}")
+        # lambda_weights: dictionary matching self.objectives keys
+        # Accepts either dict or list (for backward compatibility)
+        if lambda_weights is None:
+            # Default weights based on version
+            if version == "v1":
+                lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 0.25, "embedding_loss": 1.0, "gradient_guided_loss": 1.0}
+            elif version == "v2":
+                lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 0.25, "embedding_loss": 1.0, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
+            elif version == "v3":
+                lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 0.25, "embedding_loss": 1.0, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
+        elif isinstance(lambda_weights, list):
+            # Convert list to dict based on version
+            if version == "v1":
+                if len(lambda_weights) != 4:
+                    raise ValueError(f"GGVQVAE v1 requires 4 lambda_weights (reconstruction, commitment, embedding, gradient_guided), got {len(lambda_weights)}")
+                lambda_weights = {
+                    "reconstruction_loss": lambda_weights[0],
+                    "commitment_loss": lambda_weights[1],
+                    "embedding_loss": lambda_weights[2],
+                    "gradient_guided_loss": lambda_weights[3]
+                }
+            elif version == "v2":
+                if len(lambda_weights) != 5:
+                    raise ValueError(f"GGVQVAE v2 requires 5 lambda_weights (reconstruction, commitment, embedding, gradient_guided, edge_matching), got {len(lambda_weights)}")
+                lambda_weights = {
+                    "reconstruction_loss": lambda_weights[0],
+                    "commitment_loss": lambda_weights[1],
+                    "embedding_loss": lambda_weights[2],
+                    "gradient_guided_loss": lambda_weights[3],
+                    "edge_matching_loss": lambda_weights[4]
+                }
+            elif version == "v3":
+                if len(lambda_weights) != 5:
+                    raise ValueError(f"GGVQVAE v3 requires 5 lambda_weights (reconstruction, commitment, embedding, gradient_guided, edge_matching), got {len(lambda_weights)}")
+                lambda_weights = {
+                    "reconstruction_loss": lambda_weights[0],
+                    "commitment_loss": lambda_weights[1],
+                    "embedding_loss": lambda_weights[2],
+                    "gradient_guided_loss": lambda_weights[3],
+                    "edge_matching_loss": lambda_weights[4]
+                }
+        elif isinstance(lambda_weights, dict):
+            # Validate dict keys match objectives
+            expected_keys = set(self.objectives.keys())
+            provided_keys = set(lambda_weights.keys())
+            if expected_keys != provided_keys:
+                missing = expected_keys - provided_keys
+                extra = provided_keys - expected_keys
+                error_msg = f"lambda_weights keys must match objectives keys. "
+                if missing:
+                    error_msg += f"Missing: {missing}. "
+                if extra:
+                    error_msg += f"Extra: {extra}."
+                raise ValueError(error_msg)
         else:
-            self.lambda_weights = lambda_weights
+            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
+        
+        self.lambda_weights = lambda_weights
 
         modules = []
         

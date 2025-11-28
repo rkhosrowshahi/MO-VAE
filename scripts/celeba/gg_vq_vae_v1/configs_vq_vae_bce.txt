@@ -1,5 +1,4 @@
 scripts/celeba/gg_vq_vae_v1/upgrad/bce.yaml
-scripts/celeba/gg_vq_vae_v1/sum/bce.yaml
 scripts/celeba/gg_vq_vae_v1/aligned_mtl/bce.yaml
 scripts/celeba/gg_vq_vae_v1/dualproj/bce.yaml
 scripts/celeba/gg_vq_vae_v1/cagrad/bce.yaml

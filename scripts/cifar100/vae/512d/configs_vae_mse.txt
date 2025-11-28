@@ -1,4 +1,3 @@
-scripts/cifar100/vae/512d/sum/mse.yaml
 scripts/cifar100/vae/512d/upgrad/mse.yaml
 scripts/cifar100/vae/512d/aligned_mtl/mse.yaml
 scripts/cifar100/vae/512d/dualproj/mse.yaml
@@ -8,4 +7,3 @@ scripts/cifar100/vae/512d/imtlg/mse.yaml
 scripts/cifar100/vae/512d/jd_sum/mse.yaml
 scripts/cifar100/vae/512d/mgda/mse.yaml
 scripts/cifar100/vae/512d/nashmtl/mse.yaml
-

@@ -1,4 +1,3 @@
-scripts/cifar100/betatc_vae/sum/bce.yaml
 scripts/cifar100/betatc_vae/upgrad/bce.yaml
 scripts/cifar100/betatc_vae/aligned_mtl/bce.yaml
 scripts/cifar100/betatc_vae/dualproj/bce.yaml
@@ -8,4 +7,3 @@ scripts/cifar100/betatc_vae/imtlg/bce.yaml
 scripts/cifar100/betatc_vae/jd_sum/bce.yaml
 scripts/cifar100/betatc_vae/mgda/bce.yaml
 scripts/cifar100/betatc_vae/nashmtl/bce.yaml
-

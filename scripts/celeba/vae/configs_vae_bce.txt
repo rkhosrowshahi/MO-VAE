@@ -1,4 +1,3 @@
-scripts/celeba/vae/sum/bce.yaml
 scripts/celeba/vae/upgrad/bce.yaml
 scripts/celeba/vae/aligned_mtl/bce.yaml
 scripts/celeba/vae/dualproj/bce.yaml
@@ -8,4 +7,3 @@ scripts/celeba/vae/imtlg/bce.yaml
 scripts/celeba/vae/jd_sum/bce.yaml
 scripts/celeba/vae/mgda/bce.yaml
 scripts/celeba/vae/nashmtl/bce.yaml
-

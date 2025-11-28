@@ -162,32 +162,16 @@ class VQVAE(nn.Module):
         # lambda_weights: dictionary matching self.objectives keys
         # Accepts either dict or list (for backward compatibility)
         if lambda_weights is None:
-            lambda_weights = {"reconstruction_loss": 1.0, "commitment_loss": 1.0, "embedding_loss": 1.0}
+            lambda_weights = {"reconstruction_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25}
         elif isinstance(lambda_weights, list):
             # Convert list to dict: [reconstruction_weight, commitment_weight, embedding_weight]
-            if len(lambda_weights) != 3:
+            if len(lambda_weights) != len(self.objectives):
                 raise ValueError(f"VQVAE requires 3 lambda_weights (reconstruction, commitment, embedding), got {len(lambda_weights)}")
             lambda_weights = {
                 "reconstruction_loss": lambda_weights[0],
-                "commitment_loss": lambda_weights[1],
-                "embedding_loss": lambda_weights[2]
+                "embedding_loss": lambda_weights[1],
+                "commitment_loss": lambda_weights[2]
             }
-        elif isinstance(lambda_weights, dict):
-            # Validate dict keys match objectives
-            expected_keys = set(self.objectives.keys())
-            provided_keys = set(lambda_weights.keys())
-            if expected_keys != provided_keys:
-                missing = expected_keys - provided_keys
-                extra = provided_keys - expected_keys
-                error_msg = f"lambda_weights keys must match objectives keys. "
-                if missing:
-                    error_msg += f"Missing: {missing}. "
-                if extra:
-                    error_msg += f"Extra: {extra}."
-                raise ValueError(error_msg)
-        else:
-            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
-        
         self.lambda_weights = lambda_weights
 
         modules = []
@@ -343,20 +327,21 @@ class VQVAE(nn.Module):
         """
 
         recons = args["recons"]
-        commitment_loss = args["commitment_loss"]
         embedding_loss = args["embedding_loss"]
-        recon_loss = self.recon_obj(inputs, recons)
-        
-        # Apply lambda_weights using dictionary keys matching self.objectives
-        weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
-        weighted_commitment_loss = self.lambda_weights["commitment_loss"] * commitment_loss
-        weighted_embedding_loss = self.lambda_weights["embedding_loss"] * embedding_loss
-        
-        return {
-            "reconstruction_loss": weighted_recon_loss,
-            "commitment_loss": weighted_commitment_loss,
-            "embedding_loss": weighted_embedding_loss,
-        }
+        commitment_loss = args["commitment_loss"]
+
+        loss_dict = {}
+        for key, value in self.objectives.items():
+            if key == "embedding_loss":
+                weighted_loss = embedding_loss
+            elif key == "commitment_loss":
+                weighted_loss = commitment_loss
+            else:
+                weighted_loss = value(inputs, recons)
+            
+            loss_dict[key] = self.lambda_weights[key] * weighted_loss
+
+        return loss_dict
 
     def get_code_indices(self, input: Tensor) -> Tensor:
         """

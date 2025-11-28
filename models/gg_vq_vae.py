@@ -99,7 +99,7 @@ class GGVQVAE(nn.Module):
                  recons_dist: str = "gaussian",
                  recons_reduction: str = "mean",
                  lambda_weights: Optional[List[float]] = None,
-                 gradient_guided_version: str = "v1",
+                 version: str = "v1",
                  device=None,
                  **kwargs) -> None:
         super(GGVQVAE, self).__init__()
@@ -156,13 +156,6 @@ class GGVQVAE(nn.Module):
             raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
         self.recon_obj = recon_obj
 
-        if gradient_guided_version == "v1":
-            self.gradient_guided_loss = self.gradient_guided_v1_loss
-        elif gradient_guided_version == "v2":
-            self.gradient_guided_loss = self.gradient_guided_v2_loss
-        else:
-            raise ValueError(f"Gradient guided version {gradient_guided_version} not supported. Choose from: v1, v2")
-
         sobel_x = torch.tensor([[-1., 0., 1.],
                             [-2., 0.,  2.],
                             [-1,  0.,  1.]]).unsqueeze(0).unsqueeze(0) #(1,1,3,3)
@@ -174,64 +167,35 @@ class GGVQVAE(nn.Module):
         self.register_buffer('sobel_x', sobel_x.expand(3, 1, 3, 3))
         self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3))
 
-        self.objectives = {"reconstruction_loss": recon_obj, 'gradient_guided_loss': self.gradient_guided_loss, "commitment_loss": None, "embedding_loss": None}
-
-        self.features = ["encoding"]
-
-        # lambda_weights: dictionary matching self.objectives keys
-        # Accepts either dict or list (for backward compatibility)
-        if lambda_weights is None:
-            lambda_weights = {"reconstruction_loss": 1.0, "gradient_guided_loss": 1.0, "commitment_loss": 1.0, "embedding_loss": 1.0}
-        elif isinstance(lambda_weights, list):
-            # Convert list to dict: [reconstruction_weight, gradient_guided_weight, commitment_weight, embedding_weight]
-            if len(lambda_weights) != 4:
-                raise ValueError(f"GGVQVAE requires 4 lambda_weights (reconstruction, gradient_guided, commitment, embedding), got {len(lambda_weights)}")
-            lambda_weights = {
-                "reconstruction_loss": lambda_weights[0],
-                "gradient_guided_loss": lambda_weights[1],
-                "commitment_loss": lambda_weights[2],
-                "embedding_loss": lambda_weights[3]
-            }
-        elif isinstance(lambda_weights, dict):
-            # Validate dict keys match objectives
-            expected_keys = set(self.objectives.keys())
-            provided_keys = set(lambda_weights.keys())
-            if expected_keys != provided_keys:
-                missing = expected_keys - provided_keys
-                extra = provided_keys - expected_keys
-                error_msg = f"lambda_weights keys must match objectives keys. "
-                if missing:
-                    error_msg += f"Missing: {missing}. "
-                if extra:
-                    error_msg += f"Extra: {extra}."
-                raise ValueError(error_msg)
-        else:
-            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
+        self.objectives = {"reconstruction_loss": recon_obj, "commitment_loss": None, "embedding_loss": None}
         
-        self.lambda_weights = lambda_weights
+        if version == "v1":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+        elif version == "v2":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+            self.objectives["edge_matching_loss"] = self.edge_matching_loss_v1
+
+        elif version == "v3":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+            self.objectives["edge_matching_loss"] = self.edge_matching_loss_v2
+        else:
+            raise ValueError(f"Version {version} not supported. Choose from: v1, v2, v3")
+
+        if len(lambda_weights) != len(self.objectives):
+            raise ValueError(f"lambda_weights must have the same length as the number of objectives, got {len(lambda_weights)}")
+        else:
+            self.lambda_weights = lambda_weights
 
         modules = []
         
         # Store original hidden_dims for decoder
         encoder_hidden_dims = hidden_dims.copy()
         
-        # Setup layer normalization
-        if layer_norm == "batch":
-            norm_layer = nn.BatchNorm2d
-        elif layer_norm == "layer":
-            norm_layer = nn.LayerNorm
-        elif layer_norm == "none":
-            norm_layer = lambda x: nn.Identity()
-        else:
-            raise ValueError(f"Layer norm {layer_norm} not supported")
-        
         # Setup output activation
         if output_activation == "tanh":
             self.output_activation = nn.Tanh()
         elif output_activation == "sigmoid":
             self.output_activation = nn.Sigmoid()
-        elif output_activation == "none":
-            self.output_activation = nn.Identity()
         else:
             raise ValueError(f"Output activation {output_activation} not supported")
 
@@ -354,33 +318,49 @@ class GGVQVAE(nn.Module):
             return outputs["recons"]
         return outputs
 
-    def gradient_guided_v1_loss(self, inputs, recons):
-        # Sobel applied to R,G,B
-        x_grad = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
-        y_grad = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+    def gradient_guided_loss(self, inputs, recons):
+        # # Sobel applied to R,G,B
+        # x_grad = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        # y_grad = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
 
-        #Gradient magnitude
-        grad_mag = torch.sqrt(x_grad**2 + y_grad**2 + 1e-8)# (batch_size,C,H,W)
+        # #Gradient magnitude
+        # grad_mag = torch.sqrt(x_grad**2 + y_grad**2 + 1e-8)# (batch_size,C,H,W)
 
-        # Combining across channels - take max across channels
-        grad_max = torch.max(grad_mag, dim=1)[0]
+        # # Combining across channels - take max across channels
+        # grad_max = torch.max(grad_mag, dim=1)[0]
 
-        # Normalizing
-        flat = grad_max.view(grad_max.size(0), -1)
-        min_val = flat.min(1, keepdim=True)[0].unsqueeze(-1)
-        max_val = flat.max(1, keepdim=True)[0].unsqueeze(-1)
-        grad_max = (grad_max - min_val) / (max_val - min_val + 1e-8)
+        # # Normalizing
+        # flat = grad_max.view(grad_max.size(0), -1)
+        # min_val = flat.min(1, keepdim=True)[0].unsqueeze(-1)
+        # max_val = flat.max(1, keepdim=True)[0].unsqueeze(-1)
+        # grad_max = (grad_max - min_val) / (max_val - min_val + 1e-8)
 
-        # non-reduced reconstruction loss (B, C, H, W)
-        pixel_loss = F.mse_loss(recons, inputs, reduction='none')
-        # pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')
+        # # non-reduced reconstruction loss (B, C, H, W)
+        # pixel_loss = F.mse_loss(recons, inputs, reduction='none')
+        # # pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')
 
-        #Gradient-guided Encoder Loss
-        loss_grad = (grad_max.unsqueeze(1) * pixel_loss).mean() #(batch_size, C, H, W) then mean across batch
+        # #Gradient-guided Encoder Loss
+        # loss_grad = (grad_max.unsqueeze(1) * pixel_loss).mean() #(batch_size, C, H, W) then mean across batch
 
-        return loss_grad
+        # return loss_grad
 
-    def gradient_guided_v2_loss(self, inputs, recons):
+        eps = 1e-8
+        
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Edge-weighted pixel loss: BCE (pixels are in [0,1])
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + eps) #(batch_size,C,H,W)
+        weights = grad_target.max(dim=1)[0]  # simplified
+        weights = weights / (weights.max() + eps)  # normalize to [0,1]
+        
+        pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')  # BCE here
+        weighted_pixel_loss = (weights.unsqueeze(1) * pixel_loss).mean()
+        
+        return weighted_pixel_loss
+
+    def edge_matching_loss_v1(self, inputs, recons):
         eps = 1e-8
         
         # Compute gradients
@@ -392,15 +372,26 @@ class GGVQVAE(nn.Module):
         # Edge matching: MSE (gradients are signed, unbounded)
         edge_match_loss = F.mse_loss(recon_x, input_x) + F.mse_loss(recon_y, input_y)
         
-        # Edge-weighted pixel loss: BCE (pixels are in [0,1])
-        input_mag = torch.sqrt(input_x**2 + input_y**2 + eps)
-        weights = input_mag.max(dim=1)[0]  # simplified
-        weights = weights / (weights.max() + eps)  # normalize to [0,1]
+        return edge_match_loss
+
+    def edge_matching_loss_v2(self, inputs, recons):
+        eps = 1e-8
         
-        pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')  # BCE here
-        weighted_pixel_loss = (weights.unsqueeze(1) * pixel_loss).mean()
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
         
-        return edge_match_loss + weighted_pixel_loss
+        # Edge matching: L1 loss (gradients are signed, unbounded)
+        # Computes gradient magnitudes and compares them with L1
+        # Purpose: Forces the model to reproduce edge structures
+        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + eps)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + eps)
+
+        edge_match_loss = F.l1_loss(grad_pred, grad_target)
+        
+        return edge_match_loss
     
     def loss_function(self, inputs, args: dict) -> dict:
         """
@@ -411,23 +402,21 @@ class GGVQVAE(nn.Module):
         """
 
         recons = args["recons"]
-        commitment_loss = args["commitment_loss"]
         embedding_loss = args["embedding_loss"]
-        recon_loss = self.recon_obj(inputs, recons)
-        gradient_guided_loss = self.gradient_guided_loss(inputs, recons)
-        
-        # Apply lambda_weights using dictionary keys matching self.objectives
-        weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
-        weighted_gradient_guided_loss = self.lambda_weights["gradient_guided_loss"] * gradient_guided_loss
-        weighted_commitment_loss = self.lambda_weights["commitment_loss"] * commitment_loss
-        weighted_embedding_loss = self.lambda_weights["embedding_loss"] * embedding_loss
+        commitment_loss = args["commitment_loss"]
 
-        return {
-            "reconstruction_loss": weighted_recon_loss,
-            "gradient_guided_loss": weighted_gradient_guided_loss,
-            "commitment_loss": weighted_commitment_loss,
-            "embedding_loss": weighted_embedding_loss,
-        }
+        loss_dict = {}
+        for key, value in self.objectives.items():
+            if key == "embedding_loss":
+                weighted_loss = embedding_loss
+            elif key == "commitment_loss":
+                weighted_loss = commitment_loss
+            else:
+                weighted_loss = value(inputs, recons)
+            
+            loss_dict[key] = self.lambda_weights[key] * weighted_loss
+
+        return loss_dict
 
     def sample(self, num_samples=1, device=None):
         """

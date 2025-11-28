@@ -2,6 +2,7 @@
 # This configuration trains a VAE on CELEBA dataset with MSE and KL objectives
 
 dataset: CelebA
+data_dir: ../data
 arch: vae
 epochs: 100
 batch_size: 128

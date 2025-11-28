@@ -2,6 +2,7 @@
 # This configuration trains a BetaTC-VAE on CELEBA dataset
 
 dataset: CelebA
+data_dir: ../data
 arch: betatc_vae
 epochs: 100
 batch_size: 128

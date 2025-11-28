@@ -2,6 +2,7 @@
 # This configuration trains a BetaTC-VAE on CIFAR100 dataset
 
 dataset: cifar100
+data_dir: ../data
 arch: betatc_vae
 epochs: 100
 batch_size: 128

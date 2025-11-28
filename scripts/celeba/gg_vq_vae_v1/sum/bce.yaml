@@ -2,6 +2,7 @@
 # This configuration trains a GG-VQ-VAE on CELEBA dataset with BCE mean objectives
 
 dataset: CelebA
+data_dir: ../data
 arch: gg_vq_vae
 epochs: 100
 batch_size: 128

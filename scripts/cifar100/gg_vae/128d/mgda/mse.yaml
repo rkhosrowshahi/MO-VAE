@@ -2,6 +2,7 @@
 # This configuration trains a Gradient-Guided VAE on CIFAR100 dataset
 
 dataset: cifar100
+data_dir: ../data
 arch: gg_vae
 epochs: 100
 batch_size: 128

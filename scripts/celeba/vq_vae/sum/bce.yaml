@@ -2,6 +2,7 @@
 # This configuration trains a VQ-VAE on CELEBA dataset with BCE mean and KL objectives
 
 dataset: CelebA
+data_dir: ../data
 arch: vq_vae
 epochs: 100
 batch_size: 128

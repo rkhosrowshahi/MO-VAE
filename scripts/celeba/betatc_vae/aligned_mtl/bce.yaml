@@ -4,6 +4,7 @@
 # Note: BetaTCVAE currently uses MSE loss; this config is for future BCE support
 
 dataset: CelebA
+data_dir: ../data
 arch: betatc_vae
 epochs: 100
 batch_size: 128

@@ -2,6 +2,7 @@
 # This configuration trains a VQ-VAE on CIFAR100 dataset with MSE objectives
 
 dataset: cifar100
+data_dir: ../data
 arch: vq_vae
 epochs: 100
 batch_size: 128

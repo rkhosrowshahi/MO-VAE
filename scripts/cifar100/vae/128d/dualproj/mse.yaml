@@ -2,6 +2,7 @@
 # This configuration trains a VAE on CIFAR100 dataset with MSE mean and KL objectives
 
 dataset: cifar100
+data_dir: ../data
 arch: vae
 epochs: 100
 batch_size: 128

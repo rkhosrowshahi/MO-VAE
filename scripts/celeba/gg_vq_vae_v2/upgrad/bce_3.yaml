@@ -25,8 +25,9 @@ recons_reduction: mean
 seed: 42
 device: cuda:0
 save_path: logs/
+num_workers: 0
 save_freq: 10
-eval_freq: 10
+eval_freq: 1
 num_samples: 64
 
 # Hypervolume reference points (GG-VQ-VAE has 4 objectives: reconstruction_loss, gradient_guided_loss, commitment_loss, embedding_loss)

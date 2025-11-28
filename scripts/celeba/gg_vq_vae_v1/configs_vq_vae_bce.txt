@@ -1,11 +1,3 @@
 scripts/celeba/gg_vq_vae_v1/upgrad/bce.yaml
-scripts/celeba/gg_vq_vae_v1/aligned_mtl/bce.yaml
-scripts/celeba/gg_vq_vae_v1/dualproj/bce.yaml
-scripts/celeba/gg_vq_vae_v1/cagrad/bce.yaml
-scripts/celeba/gg_vq_vae_v1/pcgrad/bce.yaml
-scripts/celeba/gg_vq_vae_v1/imtlg/bce.yaml
-scripts/celeba/gg_vq_vae_v1/jd_sum/bce.yaml
-scripts/celeba/gg_vq_vae_v1/mgda/bce.yaml
-scripts/celeba/gg_vq_vae_v1/nashmtl/bce.yaml
-
-
+scripts/celeba/gg_vq_vae_v1/upgrad/bce_2.yaml
+scripts/celeba/gg_vq_vae_v1/upgrad/bce_3.yaml

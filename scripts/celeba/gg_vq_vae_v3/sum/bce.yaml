@@ -1,22 +1,22 @@
-# CelebA GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
+# CelebA GG-VQ-VAE Configuration - Sum Aggregator (BCE)
 # This configuration trains a GG-VQ-VAE on CelebA dataset with BCE mean objectives
 
 dataset: CelebA
 data_dir: ../data
-arch: gg_vq_vae_v2
+arch: gg_vq_vae_v3
 epochs: 100
 batch_size: 128
 optimizer: adam
 lr: 3e-4
 wd: 0.0
-aggregator: upgrad
+aggregator: sum
 normalize: false
 
 # Model architecture
 embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
-loss_weights: [1.0, 2.0, 1.0, 0.25]
+loss_weights: [0.235294, 0.235294, 0.058824, 0.235294, 0.235294]
 output_activation: sigmoid
 recons_dist: bernoulli
 recons_reduction: mean
@@ -24,19 +24,21 @@ recons_reduction: mean
 # Training settings
 seed: 42
 device: cuda:0
+data_dir: ../data
 save_path: logs/
 num_workers: 0
 save_freq: 10
 eval_freq: 1
 num_samples: 64
 
-# Hypervolume reference points (GG-VQ-VAE has 4 objectives: reconstruction_loss, gradient_guided_loss, commitment_loss, embedding_loss)
-hv_ref: [1.1, 1.1, 1.1, 1.1]
+# Hypervolume reference points (GG-VQ-VAE v3 has 5 objectives: reconstruction_loss, gradient_guided_loss, commitment_loss, embedding_loss, and additional objective)
+hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 
-# Wandb settings (optional)
+# Wandb settings
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "celeba gg_vq_vae_v2 512k 64d 1*bce + 2*gg + 1*commitment + 0.25*embedding upgrad"
+wandb_name: "cifar100 gg_vq_vae_v3 sum bernoulli 512k 64d seed42"
+
 
 

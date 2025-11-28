@@ -1,21 +1,22 @@
-# CELEBA GG-VQ-VAE Configuration - CAGrad Aggregator (BCE)
+# CELEBA GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
 # This configuration trains a GG-VQ-VAE on CELEBA dataset with BCE mean objectives
 
 dataset: CelebA
+data_dir: ../data
 arch: gg_vq_vae
 epochs: 100
 batch_size: 128
 optimizer: adam
 lr: 3e-4
 wd: 0.0
-aggregator: cagrad
+aggregator: upgrad
 normalize: false
 
 # Model architecture
 embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
-loss_weights: [1.0, 60.0, 1.0, 0.25]
+loss_weights: [1.0, 60.0, 1.0, 1.0]
 output_activation: sigmoid
 recons_dist: bernoulli
 recons_reduction: mean
@@ -24,8 +25,9 @@ recons_reduction: mean
 seed: 42
 device: cuda:0
 save_path: logs/
+num_workers: 0
 save_freq: 10
-eval_freq: 10
+eval_freq: 1
 num_samples: 64
 
 # Hypervolume reference points (GG-VQ-VAE has 4 objectives: reconstruction_loss, gradient_guided_loss, commitment_loss, embedding_loss)
@@ -35,6 +37,5 @@ hv_ref: [1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "celeba gg_vq_vae 512k 64d bce cagrad"
-
+wandb_name: "celeba gg_vq_vae 512k 64d bce upgrad run3"
 

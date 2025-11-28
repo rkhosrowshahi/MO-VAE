@@ -36,6 +36,6 @@ hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "celeba gg_vq_vae_v2 512k 64d 1*bce + 2.5*gg + 1*commitment + 0.25*embedding upgrad"
+wandb_name: "celeba gg_vq_vae_v2 512k 64d upgrad 1*bce + 1*embedding + 0.25*commitment + 1*gradient_guided + 1*edge_matching"
 
 

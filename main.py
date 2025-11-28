@@ -26,37 +26,6 @@ from torchjd.aggregation import (
     DualProj,
     Sum
 )
-# Monkey patch AlignedMTL to fix numerical instability
-# from torchjd.aggregation._aligned_mtl import AlignedMTLWeighting
-
-# def _compute_balance_transformation_patched(M: torch.Tensor) -> torch.Tensor:
-#     # Add jitter for stability
-#     M_stab = M + 1e-6 * torch.eye(len(M), device=M.device, dtype=M.dtype)
-    
-#     try:
-#         lambda_, V = torch.linalg.eigh(M_stab, UPLO="U")
-#     except torch._C._LinAlgError:
-#          # Fallback to CPU if GPU fails despite jitter
-#          lambda_, V = torch.linalg.eigh(M_stab.cpu(), UPLO="U")
-#          lambda_ = lambda_.to(M.device)
-#          V = V.to(M.device)
-
-#     tol = torch.max(lambda_) * len(M) * torch.finfo().eps
-#     rank = sum(lambda_ > tol)
-
-#     if rank == 0:
-#         identity = torch.eye(len(M), dtype=M.dtype, device=M.device)
-#         return identity
-
-#     order = torch.argsort(lambda_, dim=-1, descending=True)
-#     lambda_, V = lambda_[order][:rank], V[:, order][:, :rank]
-
-#     sigma_inv = torch.diag(1 / lambda_.sqrt())
-#     lambda_R = lambda_[-1]
-#     B = lambda_R.sqrt() * V @ sigma_inv @ V.T
-#     return B
-
-# AlignedMTLWeighting._compute_balance_transformation = staticmethod(_compute_balance_transformation_patched)
 
 import wandb
 from pymoo.indicators.hv import HV

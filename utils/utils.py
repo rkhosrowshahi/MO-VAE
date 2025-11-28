@@ -35,7 +35,7 @@ class MyCelebA(datasets.CelebA):
         return True
 
 
-def get_dataset(dataset_name, normalize=False):
+def get_dataset(dataset_name, data_dir='./data', normalize=False):
     if dataset_name.lower() == 'cifar10':
         # CIFAR-10 normalization values
         # Mean and std calculated from CIFAR-10 training set
@@ -59,10 +59,10 @@ def get_dataset(dataset_name, normalize=False):
         transform_test = transforms.Compose(transform_test)
         
         train_dataset = datasets.CIFAR10(
-            root='./data', train=True, download=True, transform=transform_train
+            root=data_dir, train=True, download=True, transform=transform_train
         )
         test_dataset = datasets.CIFAR10(
-            root='./data', train=False, download=True, transform=transform_test
+            root=data_dir, train=False, download=True, transform=transform_test
         )
     elif dataset_name.lower() == 'cifar100':
         mean = (0.5, 0.5, 0.5)
@@ -85,10 +85,10 @@ def get_dataset(dataset_name, normalize=False):
         transform_test = transforms.Compose(transform_test)
         
         train_dataset = datasets.CIFAR100(
-            root='./data', train=True, download=True, transform=transform_train
+            root=data_dir, train=True, download=True, transform=transform_train
         )
         test_dataset = datasets.CIFAR100(
-            root='./data', train=False, download=True, transform=transform_test
+            root=data_dir, train=False, download=True, transform=transform_test
         )
     elif dataset_name.lower() == 'imagenet':
         mean = (0.5, 0.5, 0.5)
@@ -112,10 +112,10 @@ def get_dataset(dataset_name, normalize=False):
         transform_test = transforms.Compose(transform_test)
         
         train_dataset = datasets.ImageNet(
-            root='./data', train=True, download=True, transform=transform_train
+            root=data_dir, train=True, download=True, transform=transform_train
         )
         test_dataset = datasets.ImageNet(
-            root='./data', train=False, download=True, transform=transform_test
+            root=data_dir, train=False, download=True, transform=transform_test
         )
     elif dataset_name.lower() == "celeba":
         input_size = 64
@@ -139,7 +139,7 @@ def get_dataset(dataset_name, normalize=False):
         val_transforms = transforms.Compose(val_transforms)
 
         train_dataset = MyCelebA(
-            './data',
+            data_dir,
             split='train',
             transform=train_transforms,
             download=False,
@@ -147,7 +147,7 @@ def get_dataset(dataset_name, normalize=False):
         
         # Replace CelebA with your dataset
         test_dataset = MyCelebA(
-            './data',
+            data_dir,
             split='test',
             transform=val_transforms,
             download=False,

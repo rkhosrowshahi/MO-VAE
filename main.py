@@ -346,7 +346,7 @@ def build_hv_indicator(objective_keys, args):
 def main(args):
     device = torch.device(args.device)
 
-    train_dataset, test_dataset, input_size = get_dataset(args.dataset, normalize=args.normalize)
+    train_dataset, test_dataset, input_size = get_dataset(args.dataset, data_dir=args.data_dir, normalize=args.normalize)
 
     train_loader = DataLoader(
         train_dataset,
@@ -621,6 +621,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--data_dir", type=str, default="./data")
     parser.add_argument("--save_path", type=str, default="logs/")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--dataset", type=str, default="CIFAR10")

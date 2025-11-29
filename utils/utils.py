@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from PIL import Image
 from torchvision import datasets, transforms
 from datasets import load_dataset
 
@@ -115,6 +116,16 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         - All datasets are converted to tensors with values in [0, 1]
         - If normalize=True, values are normalized to approximately [-1, 1] range
     """
+    def _ensure_pil(img):
+        """Convert Hugging Face style image data into a PIL image if needed."""
+        if isinstance(img, Image.Image):
+            return img
+        if isinstance(img, np.ndarray):
+            return Image.fromarray(img.astype(np.uint8))
+        if isinstance(img, list):
+            return Image.fromarray(np.array(img, dtype=np.uint8))
+        raise TypeError(f"Unsupported image type: {type(img)}")
+
     if dataset_name.lower() == 'cifar10':
         # CIFAR-10 normalization values
         # Mean and std calculated from CIFAR-10 training set
@@ -220,11 +231,11 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         test_transforms = transforms.Compose(test_transforms)
 
         def train_transform_example(ex):
-            img = ex["image"]
+            img = _ensure_pil(ex["image"])
             return {"image": train_transforms(img)}
 
         def test_transform_example(ex):
-            img = ex["image"]
+            img = _ensure_pil(ex["image"])
             return {"image": test_transforms(img)}
 
         train_dataset = train_dataset.with_transform(train_transform_example)
@@ -338,11 +349,11 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         # ])
 
         def train_transform_example(ex):
-            img = ex["image"]
+            img = _ensure_pil(ex["image"])
             return {"image": train_transforms(img)}
 
         def test_transform_example(ex):
-            img = ex["image"]
+            img = _ensure_pil(ex["image"])
             return {"image": test_transforms(img)}
 
         train_dataset = train_dataset.with_transform(train_transform_example)

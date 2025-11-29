@@ -349,26 +349,8 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         train_dataset = load_dataset("korexyz/celeba-hq-256x256", split="train")
         test_dataset = load_dataset("korexyz/celeba-hq-256x256", split="test")
 
-        # train_transform = transforms.Compose([
-        #     transforms.RandomHorizontalFlip(),  # optional
-        #     transforms.ToTensor(),
-        #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),  # [-1, 1]
-        # ])
-        # test_transform = transforms.Compose([
-        #     transforms.ToTensor(),
-        #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),  # [-1, 1]
-        # ])
-
-        def train_transform_example(ex):
-            ex["pixel_values"] = train_transforms(ex["image"])
-            return ex
-
-        def test_transform_example(ex):
-            ex["pixel_values"] = test_transforms(ex["image"])
-            return ex
-
-        train_dataset.set_transform(train_transform_example)
-        test_dataset.set_transform(test_transform_example)
+        train_dataset = HFImageDataset(train_dataset, transform=train_transforms)
+        test_dataset  = HFImageDataset(test_dataset,  transform=test_transforms)
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 

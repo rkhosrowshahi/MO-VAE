@@ -220,12 +220,12 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         test_transforms = transforms.Compose(test_transforms)
 
         def train_transform_example(examples):
-            examples["pixel_values"] = [train_transforms(img.convert("RGB")) for img in examples["image"]]
-            return examples
+            images = [train_transforms(img.convert("RGB")) for img in examples["image"]]
+            return {"pixel_values": images, "labels": examples["label"]}
 
         def test_transform_example(examples):
-            examples["pixel_values"] = [test_transforms(img.convert("RGB")) for img in examples["image"]]
-            return examples
+            images = [test_transforms(img.convert("RGB")) for img in examples["image"]]
+            return {"pixel_values": images, "labels": examples["label"]}
 
         train_dataset = train_dataset.with_transform(train_transform_example)
         test_dataset = test_dataset.with_transform(test_transform_example)

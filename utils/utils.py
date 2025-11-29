@@ -221,14 +221,17 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
 
         def train_transform_example(examples):
             images = [train_transforms(img.convert("RGB")) for img in examples["image"]]
-            return {"pixel_values": images, "labels": examples["label"]}
+            return {"image": images, "labels": examples["label"]}
 
         def test_transform_example(examples):
             images = [test_transforms(img.convert("RGB")) for img in examples["image"]]
-            return {"pixel_values": images, "labels": examples["label"]}
+            return {"image": images, "labels": examples["label"]}
 
         train_dataset = train_dataset.with_transform(train_transform_example)
         test_dataset = test_dataset.with_transform(test_transform_example)
+
+        train_dataset.set_format("torch")        # ← this is the key line!
+        test_dataset.set_format("torch")        # ← this is the key line!
     elif dataset_name.lower() == "celeba":
         input_size = 64
         mean = (0.5, 0.5, 0.5)

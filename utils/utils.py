@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torchvision import datasets, transforms
 from datasets import load_dataset
+from torch.utils.data import Dataset
 
 def set_seed(seed):
     """

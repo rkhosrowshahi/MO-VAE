@@ -62,5 +62,6 @@ tqdm==4.67.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 urllib3==2.5.0
+datasets==3.2.0
 wandb==0.23.0
 wrapt==2.0.1

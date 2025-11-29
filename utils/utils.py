@@ -219,16 +219,16 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         train_transforms = transforms.Compose(train_transforms)
         test_transforms = transforms.Compose(test_transforms)
 
-        def train_transform_example(ex):
-            ex["pixel_values"] = train_transforms(ex["image"])
-            return ex
+        def train_transform_example(examples):
+            examples["pixel_values"] = [train_transforms(img.convert("RGB")) for img in examples["image"]]
+            return examples
 
-        def test_transform_example(ex):
-            ex["pixel_values"] = test_transforms(ex["image"])
-            return ex
+        def test_transform_example(examples):
+            examples["pixel_values"] = [test_transforms(img.convert("RGB")) for img in examples["image"]]
+            return examples
 
-        train_dataset.set_transform(train_transform_example)
-        test_dataset.set_transform(test_transform_example)
+        train_dataset = train_dataset.with_transform(train_transform_example)
+        test_dataset = test_dataset.with_transform(test_transform_example)
     elif dataset_name.lower() == "celeba":
         input_size = 64
         mean = (0.5, 0.5, 0.5)

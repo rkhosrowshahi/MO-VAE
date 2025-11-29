@@ -220,21 +220,15 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         test_transforms = transforms.Compose(test_transforms)
 
         def train_transform_example(ex):
-            img = ex["image"]
-            # Handle case where img might be a list (during batching)
-            if isinstance(img, list):
-                img = img[0]
-            return {"image": train_transforms(img)}
+            ex["pixel_values"] = train_transforms(ex["image"])
+            return ex
 
         def test_transform_example(ex):
-            img = ex["image"]
-            # Handle case where img might be a list (during batching)
-            if isinstance(img, list):
-                img = img[0]
-            return {"image": test_transforms(img)}
+            ex["pixel_values"] = test_transforms(ex["image"])
+            return ex
 
-        train_dataset = train_dataset.with_transform(train_transform_example)
-        test_dataset = test_dataset.with_transform(test_transform_example)
+        train_dataset = train_dataset.set_transform(train_transform_example)
+        test_dataset = test_dataset.set_transform(test_transform_example)
     elif dataset_name.lower() == "celeba":
         input_size = 64
         mean = (0.5, 0.5, 0.5)

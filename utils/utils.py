@@ -80,6 +80,27 @@ class MyCelebA(datasets.CelebA):
     def _check_integrity(self) -> bool:
         return True
 
+class HFImageDataset(Dataset):
+    def __init__(self, hf_dataset, transform=None):
+        self.hf_dataset = hf_dataset      # already has .with_transform() applied or not
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.hf_dataset)
+
+    def __getitem__(self, idx):
+        item = self.hf_dataset[idx]                # this is a dict: {"image": PIL, "label": int}
+        
+        image = item["image"]
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+            
+        label = item["label"]
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        return image, label          # ← classic (tensor, label) tuple!
 
 def get_dataset(dataset_name, data_dir='./data', normalize=False):
     """
@@ -219,19 +240,16 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         train_transforms = transforms.Compose(train_transforms)
         test_transforms = transforms.Compose(test_transforms)
 
-        def train_transform_example(examples):
-            images = [train_transforms(img.convert("RGB")) for img in examples["image"]]
-            return {"image": images, "labels": examples["label"]}
+        # def train_transform_example(examples):
+        #     images = [train_transforms(img.convert("RGB")) for img in examples["image"]]
+        #     return {"image": images, "labels": examples["label"]}
 
-        def test_transform_example(examples):
-            images = [test_transforms(img.convert("RGB")) for img in examples["image"]]
-            return {"image": images, "labels": examples["label"]}
+        # def test_transform_example(examples):
+        #     images = [test_transforms(img.convert("RGB")) for img in examples["image"]]
+        #     return {"image": images, "labels": examples["label"]}
 
-        train_dataset = train_dataset.with_transform(train_transform_example)
-        test_dataset = test_dataset.with_transform(test_transform_example)
-
-        train_dataset.set_format("torch")        # ← this is the key line!
-        test_dataset.set_format("torch")        # ← this is the key line!
+        train_dataset = HFImageDataset(train_dataset, transform=train_transforms)
+        test_dataset  = HFImageDataset(test_dataset,  transform=test_transforms)
     elif dataset_name.lower() == "celeba":
         input_size = 64
         mean = (0.5, 0.5, 0.5)

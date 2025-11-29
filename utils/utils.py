@@ -347,7 +347,7 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
 
         # This loads CelebA-HQ 256x256 directly from Hugging Face (30,000 images)
         train_dataset = load_dataset("korexyz/celeba-hq-256x256", split="train")
-        test_dataset = load_dataset("korexyz/celeba-hq-256x256", split="test")
+        test_dataset = load_dataset("korexyz/celeba-hq-256x256", split="validation")
 
         train_dataset = HFImageDataset(train_dataset, transform=train_transforms)
         test_dataset  = HFImageDataset(test_dataset,  transform=test_transforms)

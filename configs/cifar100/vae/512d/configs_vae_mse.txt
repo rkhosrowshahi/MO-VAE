@@ -1,0 +1,9 @@
+configs/cifar100/vae/512d/upgrad/mse.yaml
+configs/cifar100/vae/512d/aligned_mtl/mse.yaml
+configs/cifar100/vae/512d/dualproj/mse.yaml
+configs/cifar100/vae/512d/cagrad/mse.yaml
+configs/cifar100/vae/512d/pcgrad/mse.yaml
+configs/cifar100/vae/512d/imtlg/mse.yaml
+configs/cifar100/vae/512d/jd_sum/mse.yaml
+configs/cifar100/vae/512d/mgda/mse.yaml
+configs/cifar100/vae/512d/nashmtl/mse.yaml

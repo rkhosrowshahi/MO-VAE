@@ -1,0 +1,9 @@
+configs/celeba/vae/upgrad/bce.yaml
+configs/celeba/vae/aligned_mtl/bce.yaml
+configs/celeba/vae/dualproj/bce.yaml
+configs/celeba/vae/cagrad/bce.yaml
+configs/celeba/vae/pcgrad/bce.yaml
+configs/celeba/vae/imtlg/bce.yaml
+configs/celeba/vae/jd_sum/bce.yaml
+configs/celeba/vae/mgda/bce.yaml
+configs/celeba/vae/nashmtl/bce.yaml

@@ -1,3 +1,0 @@
-scripts/cifar100/gg_vq_vae_v1/jd_sum/bce.yaml
-scripts/cifar100/gg_vq_vae_v1/upgrad/bce.yaml
-scripts/cifar100/gg_vq_vae_v1/aligned_mtl/bce.yaml

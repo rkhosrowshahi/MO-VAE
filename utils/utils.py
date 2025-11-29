@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torchvision import datasets, transforms
+from datasets import load_dataset
 
 def set_seed(seed):
     """
@@ -171,30 +172,63 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
     elif dataset_name.lower() == 'imagenet':
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
-        input_size = 224
+        input_size = 256
         
-        transform_train = [
+        # train_transforms = [
+        #     transforms.RandomResizedCrop(256),
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.ToTensor(),
+        # ]
+        
+        # test_transforms = [
+        #     transforms.Resize(256),
+        #     transforms.CenterCrop(256),
+        #     transforms.ToTensor(),
+        # ]
+
+        # if normalize:
+        #     train_transforms.append(transforms.Normalize(mean, std))
+        #     test_transforms.append(transforms.Normalize(mean, std))
+
+        # train_transforms = transforms.Compose(train_transforms)
+        # test_transforms = transforms.Compose(test_transforms)
+        
+        # train_dataset = datasets.ImageNet(
+        #     root=data_dir, split='train', transform=transform_train
+        # )
+        # test_dataset = datasets.ImageNet(
+        #     root=data_dir, split='val', transform=transform_test
+        # )
+
+        train_dataset = load_dataset("benjamin-paine/imagenet-1k-256x256", split="train")
+        test_dataset = load_dataset("benjamin-paine/imagenet-1k-256x256", split="test")
+
+        train_transforms = [
             transforms.RandomHorizontalFlip(),
-            transforms.Resize(256),
-            transforms.CenterCrop(256),
-            transforms.ToTensor(),
+            transforms.ToTensor()
         ]
         
-        transform_test = [transforms.ToTensor()]
+        test_transforms = [
+            transforms.ToTensor()
+        ]
 
         if normalize:
-            transform_train.append(transforms.Normalize(mean, std))
-            transform_test.append(transforms.Normalize(mean, std)) # type: ignore
+            train_transforms.append(transforms.Normalize(mean, std))
+            test_transforms.append(transforms.Normalize(mean, std))
 
-        transform_train = transforms.Compose(transform_train)
-        transform_test = transforms.Compose(transform_test)
-        
-        train_dataset = datasets.ImageNet(
-            root=data_dir, train=True, download=True, transform=transform_train
-        )
-        test_dataset = datasets.ImageNet(
-            root=data_dir, train=False, download=True, transform=transform_test
-        )
+        train_transforms = transforms.Compose(train_transforms)
+        test_transforms = transforms.Compose(test_transforms)
+
+        def train_transform_example(ex):
+            img = ex["image"]
+            return {"image": train_transforms(img)}
+
+        def test_transform_example(ex):
+            img = ex["image"]
+            return {"image": test_transforms(img)}
+
+        train_dataset = train_dataset.with_transform(train_transform_example)
+        test_dataset = test_dataset.with_transform(test_transform_example)
     elif dataset_name.lower() == "celeba":
         input_size = 64
         mean = (0.5, 0.5, 0.5)
@@ -230,6 +264,89 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
             transform=val_transforms,
             download=False,
         )
+    elif dataset_name.lower() == "celeba-128":
+        input_size = 128
+        mean = (0.5, 0.5, 0.5)
+        std = (0.5, 0.5, 0.5)
+        train_transforms = [
+            transforms.RandomHorizontalFlip(),
+            transforms.CenterCrop(178),
+            transforms.Resize(input_size),
+            transforms.ToTensor()
+        ]
+        
+        val_transforms = [
+            transforms.CenterCrop(178),
+            transforms.Resize(input_size),
+            transforms.ToTensor()
+        ]
+
+        if normalize:
+            train_transforms.append(transforms.Normalize(mean, std))
+            val_transforms.append(transforms.Normalize(mean, std))  
+
+        train_transforms = transforms.Compose(train_transforms)
+        val_transforms = transforms.Compose(val_transforms)
+
+        train_dataset = MyCelebA(
+            data_dir,
+            split='train',
+            transform=train_transforms,
+            download=False,
+        )
+        
+        # Replace CelebA with your dataset
+        test_dataset = MyCelebA(
+            data_dir,
+            split='test',
+            transform=val_transforms,
+            download=False,
+        )
+
+    elif dataset_name.lower() == "celeba-hq":
+        input_size = 256
+        mean = (0.5, 0.5, 0.5)
+        std = (0.5, 0.5, 0.5)
+        train_transforms = [
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor()
+        ]
+        
+        test_transforms = [
+            transforms.ToTensor()
+        ]
+
+        if normalize:
+            train_transforms.append(transforms.Normalize(mean, std))
+            test_transforms.append(transforms.Normalize(mean, std))  
+
+        train_transforms = transforms.Compose(train_transforms)
+        test_transforms = transforms.Compose(test_transforms)
+
+        # This loads CelebA-HQ 256x256 directly from Hugging Face (30,000 images)
+        train_dataset = load_dataset("korexyz/celeba-hq-256x256", split="train")
+        test_dataset = load_dataset("korexyz/celeba-hq-256x256", split="test")
+
+        # train_transform = transforms.Compose([
+        #     transforms.RandomHorizontalFlip(),  # optional
+        #     transforms.ToTensor(),
+        #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),  # [-1, 1]
+        # ])
+        # test_transform = transforms.Compose([
+        #     transforms.ToTensor(),
+        #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),  # [-1, 1]
+        # ])
+
+        def train_transform_example(ex):
+            img = ex["image"]
+            return {"image": train_transforms(img)}
+
+        def test_transform_example(ex):
+            img = ex["image"]
+            return {"image": test_transforms(img)}
+
+        train_dataset = train_dataset.with_transform(train_transform_example)
+        test_dataset = test_dataset.with_transform(test_transform_example)
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 

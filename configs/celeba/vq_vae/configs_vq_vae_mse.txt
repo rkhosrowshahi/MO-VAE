@@ -1,0 +1,9 @@
+configs/celeba/vq_vae/upgrad/mse.yaml
+configs/celeba/vq_vae/aligned_mtl/mse.yaml
+configs/celeba/vq_vae/dualproj/mse.yaml
+configs/celeba/vq_vae/cagrad/mse.yaml
+configs/celeba/vq_vae/pcgrad/mse.yaml
+configs/celeba/vq_vae/imtlg/mse.yaml
+configs/celeba/vq_vae/jd_sum/mse.yaml
+configs/celeba/vq_vae/mgda/mse.yaml
+configs/celeba/vq_vae/nashmtl/mse.yaml

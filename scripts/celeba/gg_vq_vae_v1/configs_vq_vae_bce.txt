@@ -1,2 +1,0 @@
-scripts/celeba/gg_vq_vae_v1/upgrad/bce.yaml
-scripts/celeba/gg_vq_vae_v1/upgrad/jd_sum.yaml

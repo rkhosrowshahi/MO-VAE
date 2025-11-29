@@ -1,0 +1,9 @@
+configs/cifar100/vq_vae/4096k_256d/upgrad/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/aligned_mtl/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/dualproj/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/cagrad/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/pcgrad/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/imtlg/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/jd_sum/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/mgda/bce.yaml
+configs/cifar100/vq_vae/4096k_256d/nashmtl/bce.yaml

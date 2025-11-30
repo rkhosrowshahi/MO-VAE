@@ -448,7 +448,13 @@ class VQVAE2(nn.Module):
             self.vq_top._summary_mode = True
             self.vq_bottom._summary_mode = True
             self.train(False)
-            summary_device = self.device
+            # Convert torch.device to string for torchsummary
+            if self.device is None:
+                summary_device = "cpu"
+            elif isinstance(self.device, torch.device):
+                summary_device = str(self.device)
+            else:
+                summary_device = self.device
             result = summary(
                 self,
                 (self.in_channels, self.input_size, self.input_size),

@@ -448,8 +448,7 @@ class VQVAE2(nn.Module):
             self.vq_top._summary_mode = True
             self.vq_bottom._summary_mode = True
             self.train(False)
-            param_device = next(self.parameters()).device
-            summary_device = "cuda" if param_device.type == "cuda" else "cpu"
+            summary_device = self.device
             result = summary(
                 self,
                 (self.in_channels, self.input_size, self.input_size),

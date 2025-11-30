@@ -536,8 +536,7 @@ class GGVQVAE(nn.Module):
             self._summary_mode = True
             self.vq_layer._summary_mode = True
             self.train(False)
-            param_device = next(self.parameters()).device
-            summary_device = "cuda" if param_device.type == "cuda" else "cpu"
+            summary_device = self.device
             result = summary(
                 self,
                 (self.in_channels, self.input_size, self.input_size),

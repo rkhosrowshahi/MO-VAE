@@ -330,7 +330,7 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
         train_transforms = [
-            transforms.RandomHorizontalFlip(),
+            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor()
         ]
         

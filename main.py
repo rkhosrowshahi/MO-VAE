@@ -136,57 +136,6 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
 
         if total_loss.item() > 1e15:
             tqdm.write(f"Step {step}: EXPLODING: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
-        # else:
-        #     tqdm.write(f"Step {step}: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
-
-        # Verify decoder gradients match between mtl_backward and standard backward
-        # This ensures that KLD (which doesn't use decoder) doesn't affect decoder gradients via MTL
-        # if step == 0 and aggregator is not None and aggregator != "sum":
-        #     features_check = None
-        #     if "mu" in outputs and "log_var" in outputs:
-        #         features_check = [outputs["mu"], outputs["log_var"]]
-        #     elif "encoding" in outputs:
-        #         features_check = [outputs["encoding"]]
-
-        #     if features_check is not None:
-        #         print("Verifying decoder gradients integrity...")
-                
-        #         # 1. Compute gradients with standard sum backward
-        #         optimizer.zero_grad()
-        #         total_loss.backward(retain_graph=True)
-                
-        #         decoder_grads = {}
-        #         decoder_net = net.module.decoder if hasattr(net, "module") else net.decoder
-        #         for name, param in decoder_net.named_parameters():
-        #             if param.grad is not None:
-        #                 decoder_grads[name] = param.grad.clone()
-
-        #         # 2. Compute gradients with mtl_backward
-        #         optimizer.zero_grad()
-        #         mtl_backward(
-        #             losses=list(loss_dict.values()),
-        #             features=features_check,
-        #             aggregator=aggregator,
-        #             retain_graph=True 
-        #         )
-
-        #         # 3. Compare gradients
-        #         max_diff = 0.0
-        #         for name, param in decoder_net.named_parameters():
-        #             if name in decoder_grads:
-        #                 grad_sum = decoder_grads[name]
-        #                 grad_mtl = param.grad
-        #                 if grad_mtl is not None and grad_sum is not None:
-        #                     diff = (grad_mtl - grad_sum).abs().max().item()
-        #                     max_diff = max(max_diff, diff)
-                
-        #         print(f"Max decoder gradient difference: {max_diff:.6e}")
-        #         if max_diff < 1e-5:
-        #             print("Gradient Check Passed: Decoder gradients are consistent.")
-        #         else:
-        #             print("Gradient Check Failed: Decoder gradients differ!")
-                
-        #         optimizer.zero_grad()
 
         # Update global step for hooks before backward
         global _current_step

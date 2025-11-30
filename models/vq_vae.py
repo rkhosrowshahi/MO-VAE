@@ -441,17 +441,25 @@ class VQVAE(nn.Module):
         Prints the model summary
         """
         was_training = self.training
+        # Get the device the model is actually on (from its parameters)
+        model_device = next(self.parameters()).device if len(list(self.parameters())) > 0 else torch.device('cpu')
+        
+        # Determine summary device (torchsummary only accepts 'cuda' or 'cpu')
+        if model_device.type == 'cuda':
+            summary_device = "cuda"
+            # If model is on a specific CUDA device (e.g., cuda:7), temporarily set it as default
+            # so torchsummary creates inputs on the correct device
+            if model_device.index is not None:
+                original_device = torch.cuda.current_device()
+                torch.cuda.set_device(model_device.index)
+        else:
+            summary_device = "cpu"
+            original_device = None
+        
         try:
             self._summary_mode = True
             self.vq_layer._summary_mode = True
             self.train(False)
-            # Convert torch.device to string for torchsummary
-            if self.device is None:
-                summary_device = "cpu"
-            elif isinstance(self.device, torch.device):
-                summary_device = str(self.device)
-            else:
-                summary_device = self.device
             result = summary(
                 self,
                 (self.in_channels, self.input_size, self.input_size),
@@ -462,6 +470,9 @@ class VQVAE(nn.Module):
             print(f"Error printing model summary: {e}")
             return None
         finally:
+            # Restore original CUDA device if we changed it
+            if model_device.type == 'cuda' and model_device.index is not None and original_device is not None:
+                torch.cuda.set_device(original_device)
             self._summary_mode = False
             self.vq_layer._summary_mode = False
             self.train(was_training)

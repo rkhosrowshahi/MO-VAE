@@ -1,2 +1,2 @@
-configs/imagenet/gg_vq_vae_v3/upgrad/config.yaml
 configs/imagenet/vq_vae/upgrad/config.yaml
+configs/imagenet/gg_vq_vae_v3/jd_sum/config.yaml

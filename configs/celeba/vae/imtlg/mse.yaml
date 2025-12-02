@@ -1,0 +1,39 @@
+# CELEBA VAE Configuration - IMTLG Aggregator (MSE+KLD)
+# This configuration trains a VAE on CELEBA dataset with MSE and KL objectives
+
+dataset: CelebA
+data_dir: ../data
+arch: vae
+epochs: 100
+batch_size: 128
+optimizer: adam
+lr: 0.001
+wd: 0.0
+aggregator: imtlg
+normalize: true
+
+# Model architecture
+latent_dim: 128
+hidden_dims: [32, 64, 128, 256, 512]
+loss_weights: [1.0, 0.00025]
+recons_dist: gaussian
+recons_reduction: mean
+
+# Training settings
+seed: 42
+num_workers: 4
+device: cuda:0
+save_path: logs/
+save_freq: 10
+eval_freq: 10
+num_samples: 64
+
+# Hypervolume reference points
+hv_ref: [1.1, 1.1]
+
+# Wandb settings (optional)
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: "celeba 128d mse+kld IMTL-G"
+

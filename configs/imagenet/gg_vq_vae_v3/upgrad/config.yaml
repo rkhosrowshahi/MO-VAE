@@ -1,0 +1,41 @@
+# ImageNet GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
+# This configuration trains a GG-VQ-VAE on ImageNet dataset with BCE mean objectives
+
+dataset: ImageNet
+data_dir: ../data/imagenet
+arch: gg_vq_vae_v3
+epochs: 10
+batch_size: 64
+optimizer: adam
+lr: 3e-4
+wd: 0.0
+aggregator: upgrad
+normalize: false
+
+# Model architecture
+embedding_dim: 64
+num_embeddings: 512
+hidden_dims: [128, 256]
+loss_weights: [1.0, 1.0, 0.25, 2.0, 1.0]
+recons_dist: bernoulli
+recons_reduction: mean
+
+# Training settings
+seed: 42
+device: cuda:7
+save_path: logs/
+num_workers: 8
+save_freq: 1
+eval_freq: 1
+num_samples: 16
+
+# Hypervolume reference points (GG-VQ-VAE v3 has 5 objectives: reconstruction_loss, embedding_loss, commitment_loss, gradient_guided_loss, edge_matching_loss)
+hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
+
+# Wandb settings
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: "imagenet gg_vq_vae_v3 512k 64d upgrad 1*bce + 1*embedding + 0.25*commitment + 2*gradient_guided + 1*edge_matching"
+
+

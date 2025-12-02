@@ -1,0 +1,4 @@
+configs/cifar100/gg_vq_vae_v2/jd_sum/bce.yaml
+configs/cifar100/gg_vq_vae_v2/upgrad/bce.yaml
+configs/cifar100/gg_vq_vae_v2/upgrad/bce_2.yaml
+configs/cifar100/gg_vq_vae_v2/upgrad/bce_3.yaml

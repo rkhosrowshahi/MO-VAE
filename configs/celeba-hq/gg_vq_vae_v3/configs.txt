@@ -1,0 +1,4 @@
+configs/celeba-hq/gg_vq_vae_v3/jd_sum/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/upgrad/config2.yaml
+configs/celeba-hq/gg_vq_vae_v3/jd_sum/config2.yaml
+configs/celeba-hq/gg_vq_vae_v3/upgrad/config.yaml

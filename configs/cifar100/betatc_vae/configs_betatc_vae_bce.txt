@@ -1,0 +1,9 @@
+configs/cifar100/betatc_vae/upgrad/bce.yaml
+configs/cifar100/betatc_vae/aligned_mtl/bce.yaml
+configs/cifar100/betatc_vae/dualproj/bce.yaml
+configs/cifar100/betatc_vae/cagrad/bce.yaml
+configs/cifar100/betatc_vae/pcgrad/bce.yaml
+configs/cifar100/betatc_vae/imtlg/bce.yaml
+configs/cifar100/betatc_vae/jd_sum/bce.yaml
+configs/cifar100/betatc_vae/mgda/bce.yaml
+configs/cifar100/betatc_vae/nashmtl/bce.yaml

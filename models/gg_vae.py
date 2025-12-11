@@ -343,4 +343,7 @@ class GGVAE(nn.Module):
         return generated_samples
 
     def print_model_summary(self):
-        return summary(self, (self.in_channels, self.input_size, self.input_size))
+        device = self.device
+        if device.type != 'cuda' or device.type != 'cuda:0':
+            device = 'cuda'
+        return summary(self, (self.in_channels, self.input_size, self.input_size), device=device)

@@ -4,7 +4,7 @@
 dataset: CelebA-HQ
 data_dir: ../data
 arch: vae
-epochs: 10
+epochs: 100
 batch_size: 64
 optimizer: adamw
 lr: 3e-4
@@ -24,7 +24,7 @@ seed: 42
 num_workers: 0
 device: cuda:0
 save_path: logs/
-save_freq: 1
+save_freq: 10
 eval_freq: 1
 num_samples: 4
 

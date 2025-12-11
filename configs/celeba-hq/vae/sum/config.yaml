@@ -5,9 +5,9 @@ dataset: CelebA-HQ
 data_dir: ../data
 arch: vae
 epochs: 10
-batch_size: 16
-optimizer: adam
-lr: 0.001
+batch_size: 64
+optimizer: adamw
+lr: 3e-4
 wd: 0.0
 aggregator: jd_sum
 normalize: false

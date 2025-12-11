@@ -4,8 +4,8 @@
 dataset: imagenet
 data_dir: ../data
 arch: gg_vae
-epochs: 100
-batch_size: 128
+epochs: 10
+batch_size: 64
 optimizer: adamw
 lr: 3e-4
 wd: 0.0
@@ -24,9 +24,9 @@ seed: 42
 device: cuda:0
 save_path: logs/
 num_workers: 0
-save_freq: 10
-eval_freq: 10
-num_samples: 8
+save_freq: 1
+eval_freq: 1
+num_samples: 4
 
 # Hypervolume reference points (GG-VQ-VAE v3 has 5 objectives: reconstruction_loss, embedding_loss, commitment_loss, gradient_guided_loss, edge_matching_loss)
 hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]

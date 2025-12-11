@@ -27,7 +27,7 @@ save_path: logs/
 num_workers: 8
 save_freq: 1
 eval_freq: 1
-num_samples: 16
+num_samples: 4
 
 # Hypervolume reference points (VQ-VAE has 3 objectives: reconstruction_loss, embedding_loss, commitment_loss)
 hv_ref: [1.1, 1.1, 1.1]

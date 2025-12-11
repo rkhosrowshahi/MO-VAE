@@ -1,5 +1,3 @@
 ./configs/imagenet/gg_vae/upgrad/config.yaml
 ./configs/imagenet/vae/upgrad/config.yaml
 ./configs/imagenet/vae/sum/config.yaml
-configs/imagenet/vq_vae/upgrad/config.yaml
-configs/imagenet/gg_vq_vae_v3/jd_sum/config.yaml

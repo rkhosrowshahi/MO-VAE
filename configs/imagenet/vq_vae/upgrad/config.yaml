@@ -6,7 +6,7 @@ data_dir: ../data/imagenet
 arch: vq_vae
 epochs: 10
 batch_size: 64
-optimizer: adam
+optimizer: adamw
 lr: 3e-4
 wd: 0.0
 aggregator: upgrad
@@ -27,7 +27,7 @@ save_path: logs/
 num_workers: 8
 save_freq: 1
 eval_freq: 1
-num_samples: 16
+num_samples: 4
 
 # Hypervolume reference points (VQ-VAE has 3 objectives: reconstruction_loss, embedding_loss, commitment_loss)
 hv_ref: [1.1, 1.1, 1.1]

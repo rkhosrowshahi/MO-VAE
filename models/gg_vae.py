@@ -343,7 +343,41 @@ class GGVAE(nn.Module):
         return generated_samples
 
     def print_model_summary(self):
-        device = self.device
-        if device.type != 'cuda' or device.type != 'cuda:0':
-            device = 'cuda'
-        return summary(self, (self.in_channels, self.input_size, self.input_size), device=device)
+        """
+        Prints the model summary
+        """
+        # Ensure all model parameters are on the same device
+        self.to(self.device)
+
+        was_training = self.training
+        # Get the device the model is actually on (from its parameters)
+        model_device = next(self.parameters()).device if len(list(self.parameters())) > 0 else torch.device('cpu')
+        
+        # Determine summary device (torchsummary only accepts 'cuda' or 'cpu')
+        if model_device.type == 'cuda':
+            summary_device = "cuda"
+            # If model is on a specific CUDA device (e.g., cuda:5), temporarily set it as default
+            # so torchsummary creates inputs on the correct device
+            if model_device.index is not None:
+                original_device = torch.cuda.current_device()
+                torch.cuda.set_device(model_device.index)
+        else:
+            summary_device = "cpu"
+            original_device = None
+        
+        try:
+            self.train(False)
+            result = summary(
+                self,
+                (self.in_channels, self.input_size, self.input_size),
+                device=summary_device,
+            )
+            return result
+        except Exception as e:
+            print(f"Error printing model summary: {e}")
+            return None
+        finally:
+            # Restore original CUDA device if we changed it
+            if model_device.type == 'cuda' and model_device.index is not None and original_device is not None:
+                torch.cuda.set_device(original_device)
+            self.train(was_training)

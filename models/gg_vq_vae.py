@@ -531,6 +531,9 @@ class GGVQVAE(nn.Module):
         """
         Prints the model summary
         """
+        # Ensure all model parameters are on the same device
+        self.to(self.device)
+
         was_training = self.training
         # Get the device the model is actually on (from its parameters)
         model_device = next(self.parameters()).device if len(list(self.parameters())) > 0 else torch.device('cpu')

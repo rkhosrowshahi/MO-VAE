@@ -442,6 +442,9 @@ class VQVAE2(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def print_model_summary(self):
+        # Ensure all model parameters are on the same device
+        self.to(self.device)
+
         was_training = self.training
         # Get the device the model is actually on (from its parameters)
         model_device = next(self.parameters()).device if len(list(self.parameters())) > 0 else torch.device('cpu')

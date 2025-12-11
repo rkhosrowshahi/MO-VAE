@@ -1,0 +1,40 @@
+# CelebA-HQ VAE Configuration - UpGrad Aggregator (BCE + KLD)
+# This configuration trains a VAE on CelebA dataset with BCE mean and KL objectives
+
+dataset: CelebA-HQ
+data_dir: ../data
+arch: vae
+epochs: 10
+batch_size: 16
+optimizer: adam
+lr: 0.001
+wd: 0.0
+aggregator: upgrad
+normalize: false
+
+# Model architecture
+latent_dim: 128
+hidden_dims: [32, 64, 128, 256, 512]
+loss_weights: [1.0, 8.138e-05]
+recons_dist: bernoulli
+recons_reduction: mean
+
+# Training settings
+seed: 42
+num_workers: 0
+device: cuda:0
+save_path: logs/
+save_freq: 1
+eval_freq: 1
+num_samples: 4
+
+# Hypervolume reference points
+hv_ref: [1.1, 1.1]
+
+# Wandb settings (optional)
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: "celeba-hq 128d 1*bce+8.138e-05*kld upgrad"
+
+

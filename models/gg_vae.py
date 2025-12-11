@@ -89,22 +89,23 @@ class GGVAE(nn.Module):
         self.register_buffer('sobel_x', sobel_x.expand(3, 1, 3, 3))
         self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3))
 
-        self.objectives = {"reconstruction_loss": recon_obj, 'gradient_guided_loss': self.gradient_guided_loss, "kld_loss": kld_obj}
+        self.objectives = {"reconstruction_loss": recon_obj, "kld_loss": kld_obj, "gradient_guided_loss": self.edge_weighted_pixel_loss, "edge_matching_loss": self.edge_matching_loss}
 
         self.features = ["mu", "log_var"]
 
         # lambda_weights: dictionary matching self.objectives keys
         # Accepts either dict or list (for backward compatibility)
         if lambda_weights is None:
-            lambda_weights = {"reconstruction_loss": 1.0, "gradient_guided_loss": 1.0, "kld_loss": 0.00025}
+            lambda_weights = {"reconstruction_loss": 1.0, "kld_loss": 0.00025, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
         elif isinstance(lambda_weights, list):
             # Convert list to dict: [reconstruction_weight, gradient_guided_weight, kld_weight]
-            if len(lambda_weights) != 3:
-                raise ValueError(f"GGVAE requires 3 lambda_weights (reconstruction, gradient_guided, kld), got {len(lambda_weights)}")
+            if len(lambda_weights) != 4:
+                raise ValueError(f"GGVAE requires 4 lambda_weights (reconstruction, gradient_guided, kld), got {len(lambda_weights)}")
             lambda_weights = {
                 "reconstruction_loss": lambda_weights[0],
-                "gradient_guided_loss": lambda_weights[1],
-                "kld_loss": lambda_weights[2]
+                "kld_loss": lambda_weights[1],
+                "gradient_guided_loss": lambda_weights[2],
+                "edge_matching_loss": lambda_weights[3]
             }
         elif isinstance(lambda_weights, dict):
             # Validate dict keys match objectives
@@ -248,29 +249,65 @@ class GGVAE(nn.Module):
     def total_trainable_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def gradient_guided_loss(self,inputs, recons):
-        # Sobel applied to R,G,B
-        x_grad = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
-        y_grad = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+    # def gradient_guided_loss(self,inputs, recons):
+    #     # Sobel applied to R,G,B
+    #     x_grad = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+    #     y_grad = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
 
-        #Gradient magnitude
-        grad_mag = torch.sqrt(x_grad**2 + y_grad**2)# (batch_size,C,H,W)
+    #     #Gradient magnitude
+    #     grad_mag = torch.sqrt(x_grad**2 + y_grad**2)# (batch_size,C,H,W)
 
-        # Combining across channels - take max across channels
-        grad_max = torch.max(grad_mag, dim=1)[0]
+    #     # Combining across channels - take max across channels
+    #     grad_max = torch.max(grad_mag, dim=1)[0]
 
-        # Normalizing
-        grad_max = (grad_max - grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1)) / \
-                            (grad_max.view(grad_max.size(0), -1).max(1, keepdim=True)[0].unsqueeze(-1) -
-                            grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1))
+    #     # Normalizing
+    #     grad_max = (grad_max - grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1)) / \
+    #                         (grad_max.view(grad_max.size(0), -1).max(1, keepdim=True)[0].unsqueeze(-1) -
+    #                         grad_max.view(grad_max.size(0), -1).min(1, keepdim=True)[0].unsqueeze(-1))
 
-        # non-reduced reconstruction loss (B, C, H, W)
-        pixel_loss = F.mse_loss(recons, inputs, reduction='none')
+    #     # non-reduced reconstruction loss (B, C, H, W)
+    #     pixel_loss = F.mse_loss(recons, inputs, reduction='none')
 
-        #Gradient-guided Encoder Loss
-        loss_grad = (grad_max.unsqueeze(1) * pixel_loss).mean() #(batch_size, C, H, W) then mean across batch
+    #     #Gradient-guided Encoder Loss
+    #     loss_grad = (grad_max.unsqueeze(1) * pixel_loss).mean() #(batch_size, C, H, W) then mean across batch
 
-        return loss_grad
+    #     return loss_grad
+
+    def edge_weighted_pixel_loss(self, inputs, recons):
+        eps = 1e-8
+        
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Edge-weighted pixel loss: BCE (pixels are in [0,1])
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + eps) #(batch_size,C,H,W)
+        weights = grad_target.max(dim=1)[0]  # simplified
+        weights = weights / (weights.max() + eps)  # normalize to [0,1]
+        
+        pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')  # BCE here
+        weighted_pixel_loss = (weights.unsqueeze(1) * pixel_loss).mean()
+        
+        return weighted_pixel_loss
+
+    def edge_matching_loss(self, inputs, recons):
+        eps = 1e-8
+        
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Edge matching: L1 loss (gradients are signed, unbounded)
+        # Computes gradient magnitudes and compares them with L1
+        # Purpose: Forces the model to reproduce edge structures
+        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + eps)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + eps)
+
+        edge_match_loss = F.l1_loss(grad_pred, grad_target)
+        
+        return edge_match_loss
 
     def loss_function(self, inputs, args: dict) -> dict:
         recons = args["recons"]

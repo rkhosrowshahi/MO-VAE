@@ -22,7 +22,7 @@ recons_reduction: mean
 # Training settings
 seed: 42
 num_workers: 0
-device: cuda:0
+device: cuda:5
 save_path: logs/
 save_freq: 1
 eval_freq: 1

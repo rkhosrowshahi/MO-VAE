@@ -24,7 +24,7 @@ recons_reduction: mean
 seed: 42
 device: cuda:6
 save_path: logs/
-num_workers: 8
+num_workers: 0
 save_freq: 1
 eval_freq: 1
 num_samples: 4
@@ -36,6 +36,6 @@ hv_ref: [1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "imagenet 512k 64d upgrad 1*bce + 1*embedding + 0.25*commitment"
+wandb_name: "imagenet vq_vae 512k 64d upgrad [1*bce + 1*embedding + 0.25*commitment]"
 
 

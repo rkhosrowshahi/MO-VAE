@@ -93,9 +93,14 @@ def benchmark_workers(
                     labels = labels.to(device, non_blocking=True)
                 except StopIteration:
                     loader_iter = iter(train_loader)
-                    images, labels = next(loader_iter)
-                    images = images.to(device, non_blocking=True)
-                    labels = labels.to(device, non_blocking=True)
+                    try:
+                        images, labels = next(loader_iter)
+                        images = images.to(device, non_blocking=True)
+                        labels = labels.to(device, non_blocking=True)
+                    except StopIteration:
+                        # Dataset is empty or exhausted, cannot continue warmup
+                        print(f"  Warning: Dataset exhausted during warmup. Skipping remaining warmup batches.")
+                        break
             
             # Synchronize GPU before timing
             if device.type == 'cuda':
@@ -115,10 +120,16 @@ def benchmark_workers(
                     batch_count += 1
                 except StopIteration:
                     loader_iter = iter(train_loader)
-                    images, labels = next(loader_iter)
-                    images = images.to(device, non_blocking=True)
-                    labels = labels.to(device, non_blocking=True)
-                    batch_count += 1
+                    try:
+                        images, labels = next(loader_iter)
+                        images = images.to(device, non_blocking=True)
+                        labels = labels.to(device, non_blocking=True)
+                        batch_count += 1
+                    except StopIteration:
+                        # Dataset is empty or exhausted, cannot continue timing
+                        print(f"  Warning: Dataset exhausted after {batch_count} batches. "
+                              f"Requested {num_batches} batches but dataset only provided {batch_count}.")
+                        break
             
             # Synchronize GPU before ending timer
             if device.type == 'cuda':

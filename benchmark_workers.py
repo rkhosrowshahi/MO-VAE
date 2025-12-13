@@ -148,7 +148,12 @@ def benchmark_workers(
                   f"({elapsed_time:.2f}s total)")
         
         avg_time = sum(run_times) / len(run_times)
-        std_time = (sum((t - avg_time) ** 2 for t in run_times) / (len(run_times) - 1)) ** 0.5
+        # Calculate standard deviation, handling the case when num_runs=1
+        if len(run_times) > 1:
+            std_time = (sum((t - avg_time) ** 2 for t in run_times) / (len(run_times) - 1)) ** 0.5
+        else:
+            # With only 1 run, there's no variance, so std is 0
+            std_time = 0.0
         results[num_workers] = {
             'avg_time_per_batch': avg_time,
             'std_time_per_batch': std_time,

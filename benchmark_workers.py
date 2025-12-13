@@ -172,20 +172,41 @@ def print_results(results):
     sorted_results = sorted(results.items())
     
     # Find the baseline (usually 0 workers or the fastest)
-    baseline_time = min(r['avg_time_per_batch'] for r in results.values())
+    # Filter out infinite values when calculating baseline
+    finite_times = [r['avg_time_per_batch'] for r in results.values() 
+                    if not (isinstance(r['avg_time_per_batch'], float) and r['avg_time_per_batch'] == float('inf'))]
+    
+    if finite_times:
+        baseline_time = min(finite_times)
+    else:
+        # All times are infinite, cannot calculate meaningful speedup
+        baseline_time = None
     
     for num_workers, stats in sorted_results:
         avg_time = stats['avg_time_per_batch']
         std_time = stats['std_time_per_batch']
-        speedup = baseline_time / avg_time
         
-        print(f"{num_workers:<10} {avg_time:<20.4f} {std_time:<15.4f} {speedup:<10.2f}x")
+        # Calculate speedup only if both baseline and avg_time are finite
+        if baseline_time is not None and not (isinstance(avg_time, float) and avg_time == float('inf')):
+            speedup = baseline_time / avg_time
+            speedup_str = f"{speedup:.2f}x"
+        else:
+            speedup_str = "N/A"
+        
+        print(f"{num_workers:<10} {avg_time:<20.4f} {std_time:<15.4f} {speedup_str:<10}")
     
-    # Find and highlight the fastest
-    fastest_workers = min(results.items(), key=lambda x: x[1]['avg_time_per_batch'])
-    print("-" * 70)
-    print(f"\nFastest configuration: {fastest_workers[0]} worker(s) "
-          f"({fastest_workers[1]['avg_time_per_batch']:.4f}s per batch)")
+    # Find and highlight the fastest (excluding infinite values)
+    finite_results = [(k, v) for k, v in results.items() 
+                      if not (isinstance(v['avg_time_per_batch'], float) and v['avg_time_per_batch'] == float('inf'))]
+    
+    if finite_results:
+        fastest_workers = min(finite_results, key=lambda x: x[1]['avg_time_per_batch'])
+        print("-" * 70)
+        print(f"\nFastest configuration: {fastest_workers[0]} worker(s) "
+              f"({fastest_workers[1]['avg_time_per_batch']:.4f}s per batch)")
+    else:
+        print("-" * 70)
+        print("\nNo valid timing results (all runs exhausted dataset without processing batches)")
     print("=" * 70)
 
 

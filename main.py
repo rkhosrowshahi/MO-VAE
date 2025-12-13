@@ -124,6 +124,8 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
     net.train()
     loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
     loss_meters["total_loss"] = AverageMeter()
+    # Track codebook usage percentage for VQ-VAE models
+    codebook_usage_meter = AverageMeter()
 
     for images, _ in train_loader:
         images = images.to(device)
@@ -136,6 +138,10 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
 
         if total_loss.item() > 1e15:
             tqdm.write(f"Step {step}: EXPLODING: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
+
+        # Extract codebook_usage_percentage if available (for VQ-VAE models)
+        if "codebook_usage_percentage" in outputs:
+            codebook_usage_meter.update(outputs["codebook_usage_percentage"], n=images.size(0))
 
         # Update global step for hooks before backward
         global _current_step
@@ -170,14 +176,19 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
 
         step += 1
         if args.use_wandb:
-            wandb.log(
-                {
-                    **{f"train/{key}": meter.avg for key, meter in loss_meters.items()},
-                    **{f"train/{key}_curr": meter.val for key, meter in loss_meters.items()},
-                },
-                step=step,
-            )
+            log_dict = {
+                **{f"train/{key}": meter.avg for key, meter in loss_meters.items()},
+                **{f"train/{key}_curr": meter.val for key, meter in loss_meters.items()},
+            }
+            # Add codebook usage percentage if available
+            if codebook_usage_meter.count > 0:
+                log_dict["train/codebook_usage_percentage"] = codebook_usage_meter.avg
+            wandb.log(log_dict, step=step)
 
+    # Return codebook usage meter if it was tracked
+    if codebook_usage_meter.count > 0:
+        loss_meters["codebook_usage_percentage"] = codebook_usage_meter
+    
     return loss_meters, step
 
 
@@ -210,6 +221,7 @@ def evaluate(net, data_loader, device, args):
     # Metrics meters
     ssim_meter = AverageMeter()
     ssnr_meter = AverageMeter()
+    codebook_usage_meter = AverageMeter()
     
     # Collect images for FID computation
     all_real_images = []
@@ -225,6 +237,10 @@ def evaluate(net, data_loader, device, args):
             loss_meters["total_loss"].update(total_loss.item())
             for key, value in loss_dict.items():
                 loss_meters[key].update(value.item())
+            
+            # Extract codebook_usage_percentage if available (for VQ-VAE models)
+            if "codebook_usage_percentage" in outputs:
+                codebook_usage_meter.update(outputs["codebook_usage_percentage"], n=images.size(0))
             
             # Compute SSIM and SSNR
             recons = outputs.get("recons")
@@ -268,6 +284,9 @@ def evaluate(net, data_loader, device, args):
     loss_meters["ssnr"] = ssnr_meter
     loss_meters["fid"] = AverageMeter()
     loss_meters["fid"].update(fid_distance)
+    # Add codebook usage percentage if available
+    if codebook_usage_meter.count > 0:
+        loss_meters["codebook_usage_percentage"] = codebook_usage_meter
 
     return loss_meters
 
@@ -307,7 +326,10 @@ def generate_random_samples(net, num_samples, device, save_path=None, log_to_wan
         plt.close()
 
     if log_to_wandb and epoch is not None:
-        wandb.log({"generated_samples": wandb.Image(grid, caption=f"Epoch {epoch}")}, step=step)
+        # Convert tensor to numpy array for wandb (avoids Windows temp directory issues)
+        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
+        grid_np = np.clip(grid_np, 0, 1)
+        wandb.log({"generated_samples": wandb.Image(grid_np, caption=f"Epoch {epoch}")}, step=step)
 
     return samples
 
@@ -394,8 +416,11 @@ def generate_reconstructed_samples(
         plt.close()
 
     if log_to_wandb and epoch is not None:
+        # Convert tensor to numpy array for wandb (avoids Windows temp directory issues)
+        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
+        grid_np = np.clip(grid_np, 0, 1)
         wandb.log(
-            {f"reconstructed_{split_name}_samples": wandb.Image(grid, caption=f"Epoch {epoch}")},
+            {f"reconstructed_{split_name}_samples": wandb.Image(grid_np, caption=f"Epoch {epoch}")},
             step=step,
         )
 
@@ -611,9 +636,17 @@ def main(args):
         else:
             train_hv = float("nan")
 
+        # Format train metrics for display
+        train_metric_strs = []
+        for key, meter in train_loss_meters.items():
+            if key == "codebook_usage_percentage":
+                train_metric_strs.append(f"{key}: {meter.avg:.2f}%")
+            else:
+                train_metric_strs.append(f"{key}: {meter.avg:.6e}")
+        
         tqdm.write(
             f" Epoch {epoch}/{args.epochs} - Train - "
-            + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in train_loss_meters.items())
+            + ", ".join(train_metric_strs)
             + f", HV: {train_hv:.2e}"
         )
 
@@ -690,6 +723,8 @@ def main(args):
                         metric_strs.append(f"{key}: N/A")
                     else:
                         metric_strs.append(f"{key}: {meter.avg:.4f}")
+                elif key == "codebook_usage_percentage":
+                    metric_strs.append(f"{key}: {meter.avg:.2f}%")
                 else:
                     metric_strs.append(f"{key}: {meter.avg:.6e}")
             

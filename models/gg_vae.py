@@ -1,29 +1,20 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from torchsummary import summary
 
-from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled, bce_per_image_sum, bce_per_pixel_mean, laplacian_per_image_sum, laplacian_per_pixel_mean, kl_divergence
+from .vae import VAE
 
+# Small epsilon value for numerical stability in gradient computations
+EPS = 1e-8
 
-class PrintLayer(nn.Module):
-    def __init__(self):
-        super(PrintLayer, self).__init__()
-
-    def forward(self, x):
-        # Do your print / debug stuff here
-        print(x.shape)
-        return x
-
-
-class UnFlatten(nn.Module):
-    def __init__(self):
-        super(UnFlatten, self).__init__()
-    def forward(self, input, size=128):
-        return input.view(-1, size, 4, 4)
 
 # Define the GGVAE model
-class GGVAE(nn.Module):
+class GGVAE(VAE):
+    """
+    Gradient-Guided Variational Autoencoder (GGVAE) model
+    
+    Inherits from VAE and adds gradient-guided and edge matching losses.
+    """
     def __init__(self, 
                  latent_dim=2, 
                  input_size=32, 
@@ -31,53 +22,27 @@ class GGVAE(nn.Module):
                  hidden_dims=None, 
                  layer_norm="batch", 
                  output_activation="tanh", 
-                 recons_dist="gaussian", recons_reduction="mean", lambda_weights=None, device=None, **kwargs):
-        super(GGVAE, self).__init__()
-        
-        self.device = device
-        
-        recon_obj = None
-        kld_obj = kl_divergence
-        
-        if recons_dist == "gaussian":
-            if recons_reduction == "mean":
-                recon_obj = mse_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = mse_per_image_sum
-            elif recons_reduction == "scaled_sum":
-                recon_obj = mse_total_batch_sum_scaled
-            else:
-                raise ValueError(f"MSE reduction {recons_reduction} not supported. Choose from: mean, sum, scaled_sum")
-            
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for gaussian
-        elif recons_dist == "bernoulli":
-            if recons_reduction == "mean":
-                recon_obj = bce_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = bce_per_image_sum
-            else:
-                 raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
-            output_activation = "sigmoid"
-        elif recons_dist == "laplacian":
-            if recons_reduction == "mean":
-                recon_obj = laplacian_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = laplacian_per_image_sum
-            else:
-                 raise ValueError(f"Laplacian reduction {recons_reduction} not supported. Choose from: mean, sum")
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for laplacian
-        else:
-            raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
+                 recons_dist="gaussian", 
+                 recons_reduction="mean", 
+                 lambda_weights=None, 
+                 device=None, 
+                 **kwargs):
+        # Initialize parent VAE class
+        super(GGVAE, self).__init__(
+            latent_dim=latent_dim,
+            input_size=input_size,
+            in_channels=in_channels,
+            hidden_dims=hidden_dims,
+            layer_norm=layer_norm,
+            output_activation=output_activation,
+            recons_dist=recons_dist,
+            recons_reduction=recons_reduction,
+            lambda_weights=None,  # We'll set this after adding additional objectives
+            device=device,
+            **kwargs
+        )
 
-        self.recon_obj = recon_obj
-        self.kld_obj = kld_obj
-
+        # Initialize Sobel filters for gradient computation
         sobel_x = torch.tensor([[-1., 0., 1.],
                             [-2., 0.,  2.],
                             [-1,  0.,  1.]]).unsqueeze(0).unsqueeze(0) #(1,1,3,3)
@@ -89,18 +54,19 @@ class GGVAE(nn.Module):
         self.register_buffer('sobel_x', sobel_x.expand(3, 1, 3, 3))
         self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3))
 
-        self.objectives = {"reconstruction_loss": recon_obj, "kld_loss": kld_obj, "gradient_guided_loss": self.edge_weighted_pixel_loss, "edge_matching_loss": self.edge_matching_loss}
-
-        self.features = ["mu", "log_var"]
+        # Update objectives dictionary to include gradient-guided and edge matching losses
+        self.objectives = {"reconstruction_loss": self.recon_obj, "kld_loss": self.kld_obj, 
+                          "gradient_guided_loss": self.edge_weighted_pixel_loss, 
+                          "edge_matching_loss": self.edge_matching_loss}
 
         # lambda_weights: dictionary matching self.objectives keys
         # Accepts either dict or list (for backward compatibility)
         if lambda_weights is None:
             lambda_weights = {"reconstruction_loss": 1.0, "kld_loss": 0.00025, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
         elif isinstance(lambda_weights, list):
-            # Convert list to dict: [reconstruction_weight, gradient_guided_weight, kld_weight]
+            # Convert list to dict: [reconstruction_weight, kld_weight, gradient_guided_weight, edge_matching_weight]
             if len(lambda_weights) != 4:
-                raise ValueError(f"GGVAE requires 4 lambda_weights (reconstruction, gradient_guided, kld), got {len(lambda_weights)}")
+                raise ValueError(f"GGVAE requires 4 lambda_weights (reconstruction, kld, gradient_guided, edge_matching), got {len(lambda_weights)}")
             lambda_weights = {
                 "reconstruction_loss": lambda_weights[0],
                 "kld_loss": lambda_weights[1],
@@ -123,131 +89,8 @@ class GGVAE(nn.Module):
         else:
             raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
         
+        # Override lambda_weights from parent
         self.lambda_weights = lambda_weights
-        
-        self.latent_dim = latent_dim
-
-        if hidden_dims is None:
-            hidden_dims = [32, 64, 128, 256, 512]
-        
-        # Calculate spatial dimensions after len(hidden_dims) stride-2 convolutions
-        # With stride=2, padding=1, kernel=3: each layer halves the spatial dimension
-        # After n convolutions: input_size -> input_size//(2^n)
-        self.input_size = input_size
-        self.in_channels = in_channels
-        self.hidden_dims = hidden_dims
-        num_layers = len(hidden_dims)
-        spatial_dim = input_size // (2 ** num_layers)
-        encoder_output_size = hidden_dims[-1] * spatial_dim * spatial_dim
-
-        if layer_norm == "batch":
-            layer_norm = nn.BatchNorm2d
-        elif layer_norm == "layer":
-            layer_norm = nn.LayerNorm
-        elif layer_norm == "none":
-            layer_norm = nn.Identity
-        else:
-            raise ValueError(f"Layer norm {layer_norm} not supported")
-
-        if output_activation == "tanh":
-            output_activation = nn.Tanh
-        elif output_activation == "sigmoid":
-            output_activation = nn.Sigmoid
-        elif output_activation == "none":
-            output_activation = nn.Identity
-        else:
-            raise ValueError(f"Output activation {output_activation} not supported")
-        
-        # Build Encoder
-        modules = []
-        encoder_in_channels = in_channels
-        for h_dim in hidden_dims:
-            modules.append(
-                nn.Sequential(
-                    nn.Conv2d(encoder_in_channels, out_channels=h_dim,
-                              kernel_size=3, stride=2, padding=1),
-                    layer_norm(h_dim),
-                    nn.LeakyReLU())
-            )
-            encoder_in_channels = h_dim
-        
-        modules.append(nn.Flatten())  # Flatten before linear layers
-        self.encoder = nn.Sequential(*modules)
-        
-        # Latent space
-        self.mu = nn.Linear(encoder_output_size, latent_dim)  # mean of the latent space
-        self.log_var = nn.Linear(encoder_output_size, latent_dim)  # log variance of the latent space
-        
-        # Build Decoder
-        self.decoder_input = nn.Linear(latent_dim, encoder_output_size)
-        
-        modules = []
-        hidden_dims_reversed = hidden_dims.copy()
-        hidden_dims_reversed.reverse()
-        
-        # Add Unflatten layer
-        modules.append(nn.Unflatten(1, (hidden_dims[-1], spatial_dim, spatial_dim)))
-        
-        # Build decoder layers (reverse of encoder)
-        for i in range(len(hidden_dims_reversed) - 1):
-            modules.append(
-                nn.Sequential(
-                    nn.ConvTranspose2d(hidden_dims_reversed[i],
-                                       hidden_dims_reversed[i + 1],
-                                       kernel_size=3,
-                                       stride=2,
-                                       padding=1,
-                                       output_padding=1),
-                    layer_norm(hidden_dims_reversed[i + 1]),
-                    nn.LeakyReLU())
-            )
-        
-        # Final layer: last transpose conv + final conv + activation
-        self.final_layer = nn.Sequential(
-            nn.ConvTranspose2d(hidden_dims_reversed[-1],
-                               hidden_dims_reversed[-1],
-                               kernel_size=3,
-                               stride=2,
-                               padding=1,
-                               output_padding=1),
-            layer_norm(hidden_dims_reversed[-1]),
-            nn.LeakyReLU(),
-            nn.Conv2d(hidden_dims_reversed[-1], out_channels=in_channels,
-                      kernel_size=3, padding=1),
-            output_activation()
-        )
-        
-        self.decoder = nn.Sequential(*modules)
-
-    def encode(self, x):
-        # Encode the input image
-        h = self.encoder(x)
-        mu, log_var = self.mu(h), self.log_var(h)
-        return mu, log_var
-
-    def reparameterize(self, mu, log_var):
-        # Reparameterize the latent space
-        std = torch.exp(0.5 * log_var)
-        eps = torch.randn_like(std)
-        z = mu + eps * std
-        return z
-
-    def decode(self, z):
-        # Decode the latent code
-        out = self.decoder_input(z)
-        out = self.decoder(out)
-        recons = self.final_layer(out)
-        return recons
-
-    def forward(self, x):
-        # Forward pass
-        mu, log_var = self.encode(x)
-        z = self.reparameterize(mu, log_var)
-        recons = self.decode(z)
-        return {"recons": recons, "mu": mu, "log_var": log_var, "z": z}
-
-    def total_trainable_params(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     # def gradient_guided_loss(self,inputs, recons):
     #     # Sobel applied to R,G,B
@@ -274,16 +117,14 @@ class GGVAE(nn.Module):
     #     return loss_grad
 
     def edge_weighted_pixel_loss(self, inputs, recons):
-        eps = 1e-8
-        
         # Compute gradients
         input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
         input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
         
         # Edge-weighted pixel loss: BCE (pixels are in [0,1])
-        grad_target = torch.sqrt(input_x**2 + input_y**2 + eps) #(batch_size,C,H,W)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS) #(batch_size,C,H,W)
         weights = grad_target.max(dim=1)[0]  # simplified
-        weights = weights / (weights.max() + eps)  # normalize to [0,1]
+        weights = weights / (weights.max() + EPS)  # normalize to [0,1]
         
         pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')  # BCE here
         weighted_pixel_loss = (weights.unsqueeze(1) * pixel_loss).mean()
@@ -291,8 +132,6 @@ class GGVAE(nn.Module):
         return weighted_pixel_loss
 
     def edge_matching_loss(self, inputs, recons):
-        eps = 1e-8
-        
         # Compute gradients
         input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
         input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
@@ -302,8 +141,8 @@ class GGVAE(nn.Module):
         # Edge matching: L1 loss (gradients are signed, unbounded)
         # Computes gradient magnitudes and compares them with L1
         # Purpose: Forces the model to reproduce edge structures
-        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + eps)
-        grad_target = torch.sqrt(input_x**2 + input_y**2 + eps)
+        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
 
         edge_match_loss = F.l1_loss(grad_pred, grad_target)
         
@@ -316,68 +155,18 @@ class GGVAE(nn.Module):
 
         recon_loss = self.objectives["reconstruction_loss"](inputs, recons)
         gradient_guided_loss = self.objectives["gradient_guided_loss"](inputs, recons)
+        edge_matching_loss = self.objectives["edge_matching_loss"](inputs, recons)
         kld_loss = self.objectives["kld_loss"](mu, log_var)
         
         # Apply lambda_weights using dictionary keys matching self.objectives
         weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
         weighted_gradient_guided_loss = self.lambda_weights["gradient_guided_loss"] * gradient_guided_loss
+        weighted_edge_matching_loss = self.lambda_weights["edge_matching_loss"] * edge_matching_loss
         weighted_kld_loss = self.lambda_weights["kld_loss"] * kld_loss
 
-        return {"reconstruction_loss": weighted_recon_loss, "gradient_guided_loss": weighted_gradient_guided_loss, "kld_loss": weighted_kld_loss}
-
-    def sample(self, num_samples=1, device=None):
-        """
-        Sample from the latent space and generate images.
-        
-        Args:
-            num_samples: Number of samples to generate
-            device: Device to generate samples on
-            
-        Returns:
-            Generated images
-        """
-        self.eval()
-        with torch.no_grad():
-            z = torch.randn(num_samples, self.latent_dim).to(device)
-            generated_samples = self.decode(z)
-        return generated_samples
-
-    def print_model_summary(self):
-        """
-        Prints the model summary
-        """
-        # Ensure all model parameters are on the same device
-        self.to(self.device)
-
-        was_training = self.training
-        # Get the device the model is actually on (from its parameters)
-        model_device = next(self.parameters()).device if len(list(self.parameters())) > 0 else torch.device('cpu')
-        
-        # Determine summary device (torchsummary only accepts 'cuda' or 'cpu')
-        if model_device.type == 'cuda':
-            summary_device = "cuda"
-            # If model is on a specific CUDA device (e.g., cuda:5), temporarily set it as default
-            # so torchsummary creates inputs on the correct device
-            if model_device.index is not None:
-                original_device = torch.cuda.current_device()
-                torch.cuda.set_device(model_device.index)
-        else:
-            summary_device = "cpu"
-            original_device = None
-        
-        try:
-            self.train(False)
-            result = summary(
-                self,
-                (self.in_channels, self.input_size, self.input_size),
-                device=summary_device,
-            )
-            return result
-        except Exception as e:
-            print(f"Error printing model summary: {e}")
-            return None
-        finally:
-            # Restore original CUDA device if we changed it
-            if model_device.type == 'cuda' and model_device.index is not None and original_device is not None:
-                torch.cuda.set_device(original_device)
-            self.train(was_training)
+        return {
+            "reconstruction_loss": weighted_recon_loss, 
+            "gradient_guided_loss": weighted_gradient_guided_loss,
+            "edge_matching_loss": weighted_edge_matching_loss,
+            "kld_loss": weighted_kld_loss
+        }

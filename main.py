@@ -782,6 +782,7 @@ if __name__ == "__main__":
     parser.add_argument("--layer_norm", type=str, default="batch")
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
+    parser.add_argument("--num_residual_layers", type=int, default=2)
     parser.add_argument("--recons_dist", type=str, default="gaussian", choices=["bernoulli", "gaussian", "laplacian"], help="Reconstruction distribution: bernoulli (BCE), gaussian (MSE), or laplacian (L1)")
     parser.add_argument("--recons_reduction", type=str, default="mean", choices=["mean", "sum", "scaled_sum"], help="Loss reduction type: mean (per_pixel_mean), sum (per_image_sum), scaled_sum (total_batch_sum_scaled - MSE only)")
     parser.add_argument("--loss_weights", type=float, nargs="+", default=[1.0, 1.0])

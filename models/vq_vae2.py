@@ -22,6 +22,7 @@ class VQVAE2(nn.Module):
                  embedding_dim: int,
                  num_embeddings: int,
                  hidden_dims: Optional[List[int]] = [128, 256],
+                 num_residual_layers: int = 2,
                  input_size: int = 64,
                  layer_norm: str = "none",
                  output_activation: str = "tanh",
@@ -36,6 +37,7 @@ class VQVAE2(nn.Module):
         
         self.embedding_dim = embedding_dim
         self.num_embeddings = num_embeddings
+        self.num_residual_layers = num_residual_layers
         self.input_size = input_size
         self.in_channels = in_channels
         self._summary_mode = False
@@ -172,7 +174,7 @@ class VQVAE2(nn.Module):
                 nn.LeakyReLU())
         )
 
-        for _ in range(2):
+        for _ in range(num_residual_layers):
             modules.append(ResidualLayer(self.bottom_dim, self.bottom_dim))
             
         modules.append(nn.LeakyReLU())
@@ -203,7 +205,7 @@ class VQVAE2(nn.Module):
                 nn.LeakyReLU())
         )
         
-        for _ in range(2):
+        for _ in range(num_residual_layers):
             modules.append(ResidualLayer(self.bottom_dim, self.bottom_dim))
             
         modules.append(

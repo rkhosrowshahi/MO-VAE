@@ -61,6 +61,47 @@ class VectorQuantizer(nn.Module):
             return quantized_latents
 
         return quantized_latents, commitment_loss, embedding_loss
+    
+    def get_used_embeddings(self, latents: Tensor) -> Tensor:
+        """
+        Get the set of embedding indices that are used for the given latents.
+        
+        Args:
+            latents: Input latents [B x D x H x W]
+            
+        Returns:
+            Tensor of unique embedding indices that are used
+        """
+        latents = latents.permute(0, 2, 3, 1).contiguous()  # [B x D x H x W] -> [B x H x W x D]
+        flat_latents = latents.view(-1, self.D)  # [BHW x D]
+        
+        # Compute L2 distance between latents and embedding weights
+        dist = torch.sum(flat_latents ** 2, dim=1, keepdim=True) + \
+               torch.sum(self.embedding.weight ** 2, dim=1) - \
+               2 * torch.matmul(flat_latents, self.embedding.weight.t())  # [BHW x K]
+        
+        # Get the encoding that has the min distance
+        encoding_inds = torch.argmin(dist, dim=1)  # [BHW]
+        
+        # Get unique indices
+        unique_inds = torch.unique(encoding_inds)
+        
+        return unique_inds
+    
+    def get_codebook_usage_percentage(self, latents: Tensor) -> float:
+        """
+        Calculate the percentage of K embeddings that are filled (used) for the given latents.
+        
+        Args:
+            latents: Input latents [B x D x H x W]
+            
+        Returns:
+            Percentage (0-100) of embeddings that are used
+        """
+        used_embeddings = self.get_used_embeddings(latents)
+        num_used = used_embeddings.size(0)
+        percentage = (num_used / self.K) * 100.0
+        return float(percentage)
 
 
 class ResidualLayer(nn.Module):
@@ -93,6 +134,7 @@ class VQVAE(nn.Module):
                  embedding_dim: int,
                  num_embeddings: int,
                  hidden_dims: Optional[List[int]] = [128, 256],
+                 num_residual_layers: int = 6,
                  input_size: int = 64,
                  layer_norm: str = "none",
                  output_activation: str = "tanh",
@@ -107,6 +149,7 @@ class VQVAE(nn.Module):
         
         self.embedding_dim = embedding_dim
         self.num_embeddings = num_embeddings
+        self.num_residual_layers = num_residual_layers
         self.input_size = input_size
         self.in_channels = in_channels
         self._summary_mode = False
@@ -216,7 +259,7 @@ class VQVAE(nn.Module):
                 nn.LeakyReLU())
         )
 
-        for _ in range(6):
+        for _ in range(num_residual_layers):
             modules.append(ResidualLayer(in_channels, in_channels))
 
         modules.append(nn.LeakyReLU())
@@ -246,7 +289,7 @@ class VQVAE(nn.Module):
                 nn.LeakyReLU())
         )
 
-        for _ in range(6):
+        for _ in range(num_residual_layers):
             modules.append(ResidualLayer(encoder_hidden_dims[-1], encoder_hidden_dims[-1]))
 
         modules.append(nn.LeakyReLU())
@@ -307,12 +350,16 @@ class VQVAE(nn.Module):
             quantized_inputs = vq_outputs
             commitment_loss, embedding_loss = None, None
 
+        # Calculate percentage of K embeddings that are filled
+        codebook_usage_percentage = self.vq_layer.get_codebook_usage_percentage(encoding)
+
         outputs = {
             "recons": self.decode(quantized_inputs),
             "quantized_inputs": quantized_inputs,
             "encoding": encoding,
             "commitment_loss": commitment_loss,
             "embedding_loss": embedding_loss,
+            "codebook_usage_percentage": codebook_usage_percentage,
         }
         if getattr(self, "_summary_mode", False):
             return outputs["recons"]

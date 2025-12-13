@@ -1,40 +1,38 @@
 # CelebA GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
 # This configuration trains a GG-VQ-VAE on CelebA dataset with BCE mean objectives
 
+
+# Dataset settings
 dataset: CelebA
 data_dir: ../data
+normalize: false
+# Model architecture
 arch: gg_vae
+latent_dim: 128
+hidden_dims: [32, 64, 128, 256, 512]
+loss_weights: [1.0, 8.138e-05, 1.0, 1.0]
+recons_dist: bernoulli
+recons_reduction: mean
+# Training settings
 epochs: 100
 batch_size: 128
 optimizer: adamw
 lr: 3e-4
 wd: 0.0
 aggregator: upgrad
-normalize: false
-
-# Model architecture
-latent_dim: 128
-hidden_dims: [32, 64, 128, 256, 512]
-loss_weights: [1.0, 8.138e-05, 1.0, 1.0]
-recons_dist: bernoulli
-recons_reduction: mean
-
-# Training settings
 seed: 42
 device: cuda:0
-save_path: logs/
 num_workers: 0
+# Logging settings
+save_path: logs/
 save_freq: 10
 eval_freq: 10
 num_samples: 8
-
-# Hypervolume reference points (GG-VQ-VAE v3 has 5 objectives: reconstruction_loss, embedding_loss, commitment_loss, gradient_guided_loss, edge_matching_loss)
+# Hypervolume reference points (GG-VAE has 4 objectives: reconstruction_loss, kl_loss, gradient_guided_loss, edge_matching_loss)
 hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
-
 # Wandb settings
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "celeba gg_vae 128d upgrad 1*bce + 8.138e-05*kld + 1*gradient_guided + 1*edge_matching"
-
+wandb_name: celeba gg_vae 128d upgrad 1*bce + 8.138e-05*kld + 1*gradient_guided + 1*edge_matching
 

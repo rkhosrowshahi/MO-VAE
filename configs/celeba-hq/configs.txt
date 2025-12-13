@@ -1,3 +1,0 @@
-./configs/celeba-hq/gg_vae/upgrad/config.yaml
-./configs/celeba-hq/vae/upgrad/config.yaml
-./configs/celeba-hq/vae/sum/config.yaml

@@ -1,24 +1,25 @@
-# CIFAR100 GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
-# This configuration trains a GG-VQ-VAE on CIFAR100 dataset with BCE mean objectives
-
+# CelebA-HQ GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
+# This configuration trains a GG-VQ-VAE on CelebA-HQ dataset with BCE mean objectives
+# Dataset settings
 
 # Dataset settings
-dataset: cifar100
+dataset: CelebA-HQ
 data_dir: ../data
 normalize: false
 # Model architecture
 arch: gg_vq_vae_v3
+num_residual_layers: 2
 embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
-loss_weights: [1.0, 1.0, 0.25, 2.0, 1.0]
+loss_weights: [2.0, 1.0, 0.25, 1.0, 1.0]
 recons_dist: bernoulli
 recons_reduction: mean
 # Training settings
-epochs: 100
+epochs: 200
 batch_size: 128
 optimizer: adam
-lr: 3e-4
+lr: 2e-4
 wd: 0.0
 aggregator: upgrad
 seed: 42
@@ -35,5 +36,5 @@ hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: cifar100 gg_vq_vae_v3 upgrad bernoulli 512k 64d seed42 run3
+wandb_name: celeba-hq gg_vq_vae_v3 512k 64d upgrad [2*bce + 1*embedding + 0.25*commitment + 1*gradient_guided + 1*edge_matching]
 

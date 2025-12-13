@@ -1,38 +1,37 @@
 # CIFAR100 GG-VAE Configuration - DualProj Aggregator (MSE+Gradient+KLD)
 # This configuration trains a Gradient-Guided VAE on CIFAR100 dataset
 
+
+# Dataset settings
 dataset: cifar100
 data_dir: ../data
+normalize: true
+# Model architecture
 arch: gg_vae
+latent_dim: 128
+hidden_dims: [32, 64, 128, 256]
+loss_weights: [1.0, 1.0, 0.00025]
+recons_dist: gaussian
+recons_reduction: mean
+# Training settings
 epochs: 100
 batch_size: 128
 optimizer: adam
 lr: 0.001
 wd: 0.0
 aggregator: dualproj
-normalize: true
-
-# Model architecture
-latent_dim: 128
-hidden_dims: [32, 64, 128, 256]
-loss_weights: [1.0, 1.0, 0.00025]
-recons_dist: gaussian
-recons_reduction: mean
-
-# Training settings
 seed: 42
 device: cuda:0
+# Logging settings
 save_path: logs/
 save_freq: 10
 eval_freq: 1
 num_samples: 64
-
-# Hypervolume reference points (3 objectives: recon, gradient, kld)
+# Hypervolume reference points (GG-VAE has 4 objectives: reconstruction_loss, kl_loss, gradient_guided_loss, edge_matching_loss)
 hv_ref: [1.1, 1.1, 1.1]
-
-# Wandb settings (optional)
+# Wandb settings
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: "cifar100 gg_vae 128d mse+gradient+kld dualproj"
+wandb_name: cifar100 gg_vae 128d mse+gradient+kld dualproj
 

@@ -19,10 +19,10 @@ batch_size: 128
 optimizer: adam
 lr: 2e-4
 wd: 0.0
-aggregator: jd_sum
+aggregator: sum
 # seed: 42
 device: cuda:5
-num_workers: 8
+num_workers: 12
 # Logging settings
 save_path: logs/
 save_freq: 1

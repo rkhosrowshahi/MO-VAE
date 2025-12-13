@@ -1,10 +1,9 @@
-# CelebA-HQ VQ-VAE Configuration - JD Sum Aggregator (BCE)
-# This configuration trains a VQ-VAE on CelebA-HQ dataset with BCE mean objectives
-# Dataset settings
+# ImageNet VQ-VAE Configuration - JD Sum Aggregator (BCE)
+# This configuration trains a VQ-VAE on ImageNet dataset with BCE mean objectives
 
 # Dataset settings
-dataset: CelebA-HQ
-data_dir: ../data
+dataset: ImageNet
+data_dir: ../data/imagenet
 normalize: false
 # Model architecture
 arch: vq_vae
@@ -15,25 +14,25 @@ loss_weights: [1.0, 1.0, 0.25]
 recons_dist: bernoulli
 recons_reduction: mean
 # Training settings
-epochs: 100
-batch_size: 16
+epochs: 20
+batch_size: 128
 optimizer: adam
-lr: 3e-4
+lr: 2e-4
 wd: 0.0
 aggregator: jd_sum
 # seed: 42
-device: cuda:0
-num_workers: 8
+device: cuda:5
+num_workers: 12
 # Logging settings
 save_path: logs/
-save_freq: 10
+save_freq: 1
 eval_freq: 1
-num_samples: 64
+num_samples: 4
 # Hypervolume reference points (VQ-VAE has 3 objectives: reconstruction_loss, embedding_loss, commitment_loss)
 hv_ref: [1.1, 1.1, 1.1]
 # Wandb settings
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba-hq vq_vae 512k 64d jd_sum [1*bce + 1*embedding + 0.25*commitment]
+wandb_name: imagenet vq_vae 512k 64d sum [1*bce + 1*embedding + 0.25*commitment]
 

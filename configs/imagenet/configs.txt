@@ -1,4 +1,4 @@
-configs\imagenet\gg_vq_vae_v3\upgrad\config_2.yaml
-configs\imagenet\gg_vq_vae_v3\sum\config_2.yaml
-configs\imagenet\vq_vae\upgrad\config.yaml
-configs\imagenet\vq_vae\sum\config.yaml
+configs/imagenet/gg_vq_vae_v3/upgrad/config_2.yaml
+configs/imagenet/gg_vq_vae_v3/sum/config_2.yaml
+configs/imagenet/vq_vae/upgrad/config.yaml
+configs/imagenet/vq_vae/sum/config.yaml

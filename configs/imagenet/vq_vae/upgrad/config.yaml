@@ -23,7 +23,7 @@ wd: 0.0
 aggregator: upgrad
 # seed: 42
 device: cuda:6
-num_workers: 12
+num_workers: 8
 # Logging settings
 save_path: logs/
 save_freq: 1

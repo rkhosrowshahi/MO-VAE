@@ -21,7 +21,7 @@ optimizer: adam
 lr: 3e-4
 wd: 0.0
 aggregator: sum
-seed: 42
+# seed: 42
 device: cuda:0
 num_workers: 0
 # Logging settings

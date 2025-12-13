@@ -21,7 +21,7 @@ optimizer: adam
 lr: 3e-4
 wd: 0.0
 aggregator: aligned_mtl
-seed: 42
+# seed: 42
 device: cuda:0
 # Logging settings
 save_path: logs/

@@ -313,10 +313,11 @@ def generate_random_samples(net, num_samples, device, save_path=None, log_to_wan
     samples = net.sample(num_samples=num_samples, device=device)
     grid = make_grid(samples, nrow=int(np.sqrt(num_samples)), normalize=True)
 
-    if save_path is not None:
-        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
-        grid_np = np.clip(grid_np, 0, 1)
+    # Convert tensor to numpy array (for both matplotlib and wandb, avoids Windows temp directory issues)
+    grid_np = grid.cpu().numpy().transpose((1, 2, 0))
+    grid_np = np.clip(grid_np, 0, 1)
 
+    if save_path is not None:
         plt.figure(figsize=(10, 10))
         plt.imshow(grid_np)
         plt.axis("off")
@@ -326,9 +327,6 @@ def generate_random_samples(net, num_samples, device, save_path=None, log_to_wan
         plt.close()
 
     if log_to_wandb and epoch is not None:
-        # Convert tensor to numpy array for wandb (avoids Windows temp directory issues)
-        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
-        grid_np = np.clip(grid_np, 0, 1)
         wandb.log({"generated_samples": wandb.Image(grid_np, caption=f"Epoch {epoch}")}, step=step)
 
     return samples
@@ -403,10 +401,11 @@ def generate_reconstructed_samples(
     comparison_tensor = torch.stack(comparison)
     grid = make_grid(comparison_tensor, nrow=int(np.sqrt(num_samples)) * 2, normalize=True)
 
-    if save_path is not None:
-        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
-        grid_np = np.clip(grid_np, 0, 1)
+    # Convert tensor to numpy array (for both matplotlib and wandb, avoids Windows temp directory issues)
+    grid_np = grid.cpu().numpy().transpose((1, 2, 0))
+    grid_np = np.clip(grid_np, 0, 1)
 
+    if save_path is not None:
         plt.figure(figsize=(15, 15))
         plt.imshow(grid_np)
         plt.axis("off")
@@ -416,9 +415,6 @@ def generate_reconstructed_samples(
         plt.close()
 
     if log_to_wandb and epoch is not None:
-        # Convert tensor to numpy array for wandb (avoids Windows temp directory issues)
-        grid_np = grid.cpu().numpy().transpose((1, 2, 0))
-        grid_np = np.clip(grid_np, 0, 1)
         wandb.log(
             {f"reconstructed_{split_name}_samples": wandb.Image(grid_np, caption=f"Epoch {epoch}")},
             step=step,

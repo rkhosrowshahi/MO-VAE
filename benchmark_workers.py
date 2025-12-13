@@ -136,7 +136,12 @@ def benchmark_workers(
                 torch.cuda.synchronize()
             
             elapsed_time = time.time() - start_time
-            time_per_batch = elapsed_time / num_batches
+            # Use batch_count (actual batches processed) instead of num_batches (requested)
+            if batch_count > 0:
+                time_per_batch = elapsed_time / batch_count
+            else:
+                # Edge case: no batches were processed
+                time_per_batch = float('inf')
             run_times.append(time_per_batch)
             
             print(f"  Run {run + 1}/{num_runs}: {time_per_batch:.4f}s per batch "

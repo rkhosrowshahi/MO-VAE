@@ -22,7 +22,7 @@ optimizer: adam
 lr: 0.001
 wd: 0.0
 aggregator: cagrad
-# seed: 42
+seed: 42
 device: cuda:0
 num_workers: 4
 # Logging settings

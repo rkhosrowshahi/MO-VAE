@@ -1,0 +1,41 @@
+# CelebA BetaTC-VAE Configuration - DualProj Aggregator (BCE)
+# This configuration trains a BetaTC-VAE on CelebA dataset with BCE reconstruction
+# BetaTC-VAE decomposes ELBO into: reconstruction_loss, mi_loss, tc_loss, kld
+# Note: BetaTCVAE currently uses MSE loss; this config is for future BCE support
+
+
+# Dataset settings
+dataset: CelebA
+data_dir: ../data
+normalize: false
+# Model architecture
+arch: betatc_vae
+latent_dim: 128
+hidden_dims: [32, 32, 64, 64]
+loss_weights: [1.0, 1.0, 6.0, 1.0]
+recons_dist: bernoulli
+recons_reduction: mean
+# Training settings
+epochs: 100
+batch_size: 128
+optimizer: adam
+lr: 0.001
+wd: 0.0
+aggregator: dualproj
+seed: 999
+device: cuda:0
+num_workers: 4
+# Logging settings
+save_path: logs/
+save_freq: 10
+eval_freq: 10
+num_samples: 64
+# Hypervolume reference points (BetaTC-VAE has 2 objectives: reconstruction_loss, tc_loss)
+hv_ref: [1.1, 1.1, 1.1, 1.1]
+# Wandb settings
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: celeba 128d betatc_vae bce dualproj seed999
+anneal_steps: 10000
+

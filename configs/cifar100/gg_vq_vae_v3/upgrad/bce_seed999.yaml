@@ -1,0 +1,39 @@
+# CIFAR100 GG-VQ-VAE Configuration - UpGrad Aggregator (BCE)
+# This configuration trains a GG-VQ-VAE on CIFAR100 dataset with BCE mean objectives
+
+
+# Dataset settings
+dataset: cifar100
+data_dir: ../data
+normalize: false
+# Model architecture
+arch: gg_vq_vae_v3
+embedding_dim: 64
+num_embeddings: 512
+hidden_dims: [128, 256]
+loss_weights: [1.0, 1.0, 0.25, 1.0, 1.0]
+recons_dist: bernoulli
+recons_reduction: mean
+# Training settings
+epochs: 100
+batch_size: 128
+optimizer: adam
+lr: 3e-4
+wd: 0.0
+aggregator: upgrad
+seed: 999
+device: cuda:0
+num_workers: 0
+# Logging settings
+save_path: logs/
+save_freq: 10
+eval_freq: 1
+num_samples: 64
+# Hypervolume reference points (GG-VQ-VAE v3 has 5 objectives: reconstruction_loss, embedding_loss, commitment_loss, gradient_guided_loss, edge_matching_loss)
+hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
+# Wandb settings
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: cifar100 gg_vq_vae_v3 upgrad bernoulli 512k 64d seed42
+

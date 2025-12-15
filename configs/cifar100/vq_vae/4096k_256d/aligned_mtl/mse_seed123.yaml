@@ -1,0 +1,38 @@
+# CIFAR100 VQ-VAE Configuration - Aligned MTL Aggregator (MSE)
+# This configuration trains a VQ-VAE on CIFAR100 dataset with MSE objectives
+
+
+# Dataset settings
+dataset: cifar100
+data_dir: ../data
+normalize: true
+# Model architecture
+arch: vq_vae
+embedding_dim: 256
+num_embeddings: 4096
+hidden_dims: [128, 256]
+loss_weights: [1.0, 1.0, 0.25]
+recons_dist: gaussian
+recons_reduction: mean
+# Training settings
+epochs: 100
+batch_size: 128
+optimizer: adam
+lr: 3e-4
+wd: 0.0
+aggregator: aligned_mtl
+seed: 123
+device: cuda:0
+# Logging settings
+save_path: logs/
+save_freq: 10
+eval_freq: 1
+num_samples: 64
+# Hypervolume reference points (VQ-VAE has 3 objectives: reconstruction_loss, embedding_loss, commitment_loss)
+hv_ref: [1.1, 1.1, 1.1]
+# Wandb settings
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: cifar100 vq_vae 4096k 256d mse aligned_mtl seed123
+

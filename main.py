@@ -503,8 +503,8 @@ def main(args):
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
-        drop_last=True,
-        persistent_workers=True,
+        drop_last=False,
+        persistent_workers=True if args.num_workers > 0 else False,
     )
     test_loader = DataLoader(
         test_dataset,
@@ -513,6 +513,7 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=True,
         drop_last=False,
+        persistent_workers=True if args.num_workers > 0 else False,
     )
 
     args.dataset_size = len(train_dataset)

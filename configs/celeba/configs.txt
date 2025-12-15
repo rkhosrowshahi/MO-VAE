@@ -1,0 +1,8 @@
+configs/celeba/vq_vae/upgrad/bce.yaml
+configs/celeba/vq_vae/sum/bce.yaml
+configs/celeba/gg_vq_vae_v3/upgrad/config_1.yaml
+configs/celeba/gg_vq_vae_v3/sum/config_1.yaml
+configs/celeba/gg_vq_vae_v3/upgrad/config_2.yaml
+configs/celeba/gg_vq_vae_v3/sum/config_2.yaml
+configs/celeba/gg_vq_vae_v3/upgrad/config_3.yaml
+configs/celeba/gg_vq_vae_v3/sum/config_3.yaml

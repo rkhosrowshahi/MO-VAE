@@ -1,5 +1,7 @@
 configs/celeba-hq/vq_vae/sum/config.yaml
 configs/celeba-hq/vq_vae/upgrad/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/upgrad/config_3.yaml
+configs/celeba-hq/gg_vq_vae_v3/sum/config_3.yaml
 configs/celeba-hq/gg_vq_vae_v3/upgrad/config_2.yaml
 configs/celeba-hq/gg_vq_vae_v3/sum/config_2.yaml
 configs/celeba-hq/gg_vq_vae_v3/upgrad/config_1.yaml

@@ -1,10 +1,10 @@
 """
-Image quality metrics for evaluation: SSIM, SSNR, FID, IS, and Precision/Recall
+Image quality metrics for evaluation: SSIM, SSNR, PSNR, LPIPS, FID, IS, and Precision/Recall
 """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import inception_v3, Inception_V3_Weights
+from torchvision.models import inception_v3, Inception_V3_Weights, vgg16, VGG16_Weights
 import numpy as np
 from scipy import linalg
 from scipy.spatial.distance import cdist
@@ -133,6 +133,193 @@ def ssnr(img1, img2):
     snr_db = 10 * torch.log10(snr)
     
     return snr_db.mean().item()
+
+
+def psnr(img1, img2, max_val=1.0):
+    """
+    Compute Peak Signal-to-Noise Ratio (PSNR) between original and reconstructed images.
+    
+    PSNR measures the ratio between the maximum possible power of a signal and the power
+    of corrupting noise. It's a widely used metric for image quality assessment, especially
+    for reconstruction tasks. Higher values indicate better reconstruction quality.
+    
+    PSNR = 20 * log10(MAX_VAL / sqrt(MSE))
+    where MAX_VAL is the maximum possible pixel value (default 1.0 for images in [0, 1])
+    and MSE is the mean squared error between the two images.
+    
+    Args:
+        img1: Original image tensor of shape (B, C, H, W) in range [0, 1] or [-1, 1]
+        img2: Reconstructed image tensor of shape (B, C, H, W) in range [0, 1] or [-1, 1]
+        max_val: Maximum possible pixel value. Default is 1.0 for images in [0, 1] range.
+                For images in [0, 255] range, use max_val=255.0.
+        
+    Returns:
+        float: Average PSNR value in dB across the batch. Higher is better.
+               Typical values range from 20-40 dB for natural images, with higher
+               values indicating better quality.
+    """
+    # Normalize to [0, 1] if in [-1, 1] range
+    if img1.min() < 0:
+        img1 = (img1 + 1) / 2
+    if img2.min() < 0:
+        img2 = (img2 + 1) / 2
+    
+    # Clamp to valid range
+    img1 = torch.clamp(img1, 0, 1)
+    img2 = torch.clamp(img2, 0, 1)
+    
+    # Compute MSE per image
+    mse = torch.mean((img1 - img2) ** 2, dim=[1, 2, 3])  # (B,)
+    
+    # Avoid log(0) by clamping MSE to a small positive value
+    mse = torch.clamp(mse, min=1e-10)
+    
+    # Compute PSNR in dB
+    psnr_values = 20 * torch.log10(torch.tensor(max_val, device=mse.device, dtype=mse.dtype)) - 10 * torch.log10(mse)
+    
+    return psnr_values.mean().item()
+
+
+class VGGFeatureExtractor(nn.Module):
+    """
+    VGG16 feature extractor for LPIPS computation.
+    
+    Extracts features from multiple layers of a pretrained VGG16 network.
+    This follows the LPIPS approach of using deep features from multiple
+    layers to compute perceptual similarity.
+    """
+    def __init__(self, device='cuda'):
+        """
+        Initialize the VGG16 feature extractor.
+        
+        Args:
+            device: Device to load the model on (e.g., 'cuda:0' or 'cpu')
+        """
+        super(VGGFeatureExtractor, self).__init__()
+        self.device = device
+        vgg = vgg16(weights=VGG16_Weights.DEFAULT)
+        vgg.eval()
+        
+        # Extract features from multiple layers (similar to LPIPS)
+        # We use conv layers before pooling: conv1_2, conv2_2, conv3_3, conv4_3, conv5_3
+        self.features = nn.Sequential(*list(vgg.features.children())[:30]).to(device)  # Up to conv4_3
+        self.features.eval()
+        
+        # Register hooks to extract features from intermediate layers
+        self.layer_outputs = {}
+        self.hooks = []
+        
+        # Register hooks for conv1_2, conv2_2, conv3_3, conv4_3
+        layer_indices = [3, 8, 15, 22]  # After conv1_2, conv2_2, conv3_3, conv4_3
+        
+        def get_activation(name):
+            def hook(module, input, output):
+                self.layer_outputs[name] = output
+            return hook
+        
+        for idx in layer_indices:
+            self.hooks.append(self.features[idx].register_forward_hook(get_activation(f'layer_{idx}')))
+    
+    def forward(self, x):
+        """
+        Extract features from multiple layers of VGG16.
+        
+        Args:
+            x: Input image tensor of shape (B, C, H, W) in range [0, 1] or [-1, 1]
+        
+        Returns:
+            dict: Dictionary mapping layer names to feature tensors
+        """
+        # Clear previous outputs
+        self.layer_outputs = {}
+        
+        # Normalize to [0, 1] if in [-1, 1] range
+        if x.min() < 0:
+            x = (x + 1) / 2
+        
+        # Clamp to valid range
+        x = torch.clamp(x, 0, 1)
+        
+        # Normalize for VGG (ImageNet normalization)
+        mean = torch.tensor([0.485, 0.456, 0.406], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+        x = (x - mean) / std
+        
+        # Forward pass
+        _ = self.features(x)
+        
+        return self.layer_outputs.copy()
+    
+    def __del__(self):
+        """Clean up hooks when the object is deleted."""
+        for hook in self.hooks:
+            hook.remove()
+
+
+def lpips(img1, img2, device='cuda', net='vgg'):
+    """
+    Compute Learned Perceptual Image Patch Similarity (LPIPS) between images.
+    
+    LPIPS measures perceptual similarity using deep features from a pretrained network.
+    It's more aligned with human perception than pixel-based metrics like PSNR or MSE.
+    Lower values indicate more similar images (better reconstruction quality).
+    
+    This implementation uses VGG16 features from multiple layers, following the LPIPS
+    methodology. The distance is computed as the weighted L2 distance between
+    normalized deep features.
+    
+    Args:
+        img1: Original image tensor of shape (B, C, H, W) in range [0, 1] or [-1, 1]
+        img2: Reconstructed image tensor of shape (B, C, H, W) in range [0, 1] or [-1, 1]
+        device: Device to run computation on (e.g., 'cuda:0' or 'cpu')
+        net: Network to use for feature extraction ('vgg' is currently supported)
+        
+    Returns:
+        float: Average LPIPS distance across the batch. Lower is better.
+               Typical values range from 0.0 (identical) to 1.0+ (very different).
+               Good reconstructions typically have LPIPS < 0.3.
+    """
+    if net != 'vgg':
+        raise ValueError(f"Network {net} not supported. Currently only 'vgg' is supported.")
+    
+    # Initialize feature extractor (will be cached if used multiple times)
+    if not hasattr(lpips, '_feature_extractor'):
+        lpips._feature_extractor = VGGFeatureExtractor(device=device)
+    
+    feature_extractor = lpips._feature_extractor
+    
+    # Extract features for both images
+    with torch.no_grad():
+        features1 = feature_extractor(img1)
+        features2 = feature_extractor(img2)
+    
+    # Compute LPIPS distance for each layer and average
+    lpips_scores = []
+    
+    for layer_name in features1.keys():
+        feat1 = features1[layer_name]
+        feat2 = features2[layer_name]
+        
+        # Normalize features (unit normalization per spatial location)
+        # Reshape to (B, C, H*W) for normalization
+        B, C, H, W = feat1.shape
+        feat1_flat = feat1.view(B, C, -1)  # (B, C, H*W)
+        feat2_flat = feat2.view(B, C, -1)  # (B, C, H*W)
+        
+        # L2 normalize along channel dimension
+        feat1_norm = F.normalize(feat1_flat, p=2, dim=1)  # (B, C, H*W)
+        feat2_norm = F.normalize(feat2_flat, p=2, dim=1)  # (B, C, H*W)
+        
+        # Compute L2 distance and average over spatial locations
+        diff = (feat1_norm - feat2_norm) ** 2
+        layer_distance = diff.sum(dim=1).mean(dim=1)  # (B,) - average over spatial dim
+        
+        lpips_scores.append(layer_distance)
+    
+    # Average across all layers
+    lpips_per_image = torch.stack(lpips_scores, dim=0).mean(dim=0)  # (B,)
+    
+    return lpips_per_image.mean().item()
 
 
 class InceptionV3(nn.Module):

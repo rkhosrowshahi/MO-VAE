@@ -26,6 +26,7 @@ from torchjd.aggregation import (
     DualProj,
     Sum
 )
+from utils.jd import NUPGrad, PNUPGrad
 
 import wandb
 from pymoo.indicators.hv import HV
@@ -125,6 +126,7 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
     loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
     loss_meters["total_loss"] = AverageMeter()
     # Track codebook usage percentage for VQ-VAE models
+    # For training: use per-batch calculation (averaged) to avoid memory issues
     codebook_usage_meter = AverageMeter()
 
     for images, _ in train_loader:
@@ -139,7 +141,8 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
         if total_loss.item() > 1e15:
             tqdm.write(f"Step {step}: EXPLODING: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
 
-        # Extract codebook_usage_percentage if available (for VQ-VAE models)
+        # Extract codebook_usage_percentage per batch (for VQ-VAE models)
+        # This uses per-batch calculation to avoid memory issues during training
         if "codebook_usage_percentage" in outputs:
             codebook_usage_meter.update(outputs["codebook_usage_percentage"], n=images.size(0))
 
@@ -180,12 +183,12 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
                 **{f"train/{key}": meter.avg for key, meter in loss_meters.items()},
                 **{f"train/{key}_curr": meter.val for key, meter in loss_meters.items()},
             }
-            # Add codebook usage percentage if available
+            # Add codebook usage percentage if available (per-batch averaged)
             if codebook_usage_meter.count > 0:
                 log_dict["train/codebook_usage_percentage"] = codebook_usage_meter.avg
             wandb.log(log_dict, step=step)
 
-    # Return codebook usage meter if it was tracked
+    # Return codebook usage meter if it was tracked (per-batch averaged)
     if codebook_usage_meter.count > 0:
         loss_meters["codebook_usage_percentage"] = codebook_usage_meter
     
@@ -225,7 +228,13 @@ def evaluate(net, data_loader, device, args):
     ssnr_meter = AverageMeter()
     psnr_meter = AverageMeter()
     lpips_meter = AverageMeter()
-    codebook_usage_meter = AverageMeter()
+    
+    # Accumulate unique codebook indices across batches for accurate utilization calculation
+    all_codebook_indices = None
+    all_codebook_indices_top = None  # For VQVAE2
+    all_codebook_indices_bottom = None  # For VQVAE2
+    codebook_size = None
+    is_vqvae2 = False
     
     # Collect images for FID computation
     all_real_images = []
@@ -242,9 +251,36 @@ def evaluate(net, data_loader, device, args):
             for key, value in loss_dict.items():
                 loss_meters[key].update(value.item())
             
-            # Extract codebook_usage_percentage if available (for VQ-VAE models)
-            if "codebook_usage_percentage" in outputs:
-                codebook_usage_meter.update(outputs["codebook_usage_percentage"], n=images.size(0))
+            # Accumulate codebook indices across batches for accurate utilization calculation
+            # Handle VQVAE (single codebook) and VQVAE2 (two codebooks)
+            if "encoding_inds" in outputs and outputs["encoding_inds"] is not None:
+                # Single codebook (VQVAE, GGVQVAE)
+                batch_indices = outputs["encoding_inds"].detach().cpu()
+                if all_codebook_indices is None:
+                    all_codebook_indices = batch_indices
+                    # Get codebook size from the model
+                    if hasattr(net, 'vq_layer') and hasattr(net.vq_layer, 'K'):
+                        codebook_size = net.vq_layer.K
+                else:
+                    all_codebook_indices = torch.cat([all_codebook_indices, batch_indices], dim=0)
+            elif "encoding_inds_top" in outputs and "encoding_inds_bottom" in outputs:
+                # Two codebooks (VQVAE2) - track separately
+                is_vqvae2 = True
+                if outputs["encoding_inds_top"] is not None and outputs["encoding_inds_bottom"] is not None:
+                    batch_indices_top = outputs["encoding_inds_top"].detach().cpu()
+                    batch_indices_bottom = outputs["encoding_inds_bottom"].detach().cpu()
+                    # Track top codebook
+                    if all_codebook_indices_top is None:
+                        all_codebook_indices_top = batch_indices_top
+                        if hasattr(net, 'vq_top') and hasattr(net.vq_top, 'K'):
+                            codebook_size = net.vq_top.K
+                    else:
+                        all_codebook_indices_top = torch.cat([all_codebook_indices_top, batch_indices_top], dim=0)
+                    # Track bottom codebook
+                    if all_codebook_indices_bottom is None:
+                        all_codebook_indices_bottom = batch_indices_bottom
+                    else:
+                        all_codebook_indices_bottom = torch.cat([all_codebook_indices_bottom, batch_indices_bottom], dim=0)
             
             # Compute SSIM, SSNR, PSNR, and LPIPS
             recons = outputs.get("recons")
@@ -300,8 +336,27 @@ def evaluate(net, data_loader, device, args):
     loss_meters["lpips"] = lpips_meter
     loss_meters["fid"] = AverageMeter()
     loss_meters["fid"].update(fid_distance)
-    # Add codebook usage percentage if available
-    if codebook_usage_meter.count > 0:
+    
+    # Calculate final codebook utilization across all batches
+    if is_vqvae2 and all_codebook_indices_top is not None and all_codebook_indices_bottom is not None and codebook_size is not None:
+        # VQVAE2: calculate for both codebooks and take average
+        unique_indices_top = torch.unique(all_codebook_indices_top)
+        unique_indices_bottom = torch.unique(all_codebook_indices_bottom)
+        num_used_top = unique_indices_top.size(0)
+        num_used_bottom = unique_indices_bottom.size(0)
+        usage_top = (num_used_top / codebook_size) * 100.0
+        usage_bottom = (num_used_bottom / codebook_size) * 100.0
+        codebook_usage_percentage = (usage_top + usage_bottom) / 2.0
+        codebook_usage_meter = AverageMeter()
+        codebook_usage_meter.update(codebook_usage_percentage)
+        loss_meters["codebook_usage_percentage"] = codebook_usage_meter
+    elif all_codebook_indices is not None and codebook_size is not None:
+        # Single codebook (VQVAE, GGVQVAE)
+        unique_indices = torch.unique(all_codebook_indices)
+        num_used = unique_indices.size(0)
+        codebook_usage_percentage = (num_used / codebook_size) * 100.0
+        codebook_usage_meter = AverageMeter()
+        codebook_usage_meter.update(codebook_usage_percentage)
         loss_meters["codebook_usage_percentage"] = codebook_usage_meter
 
     return loss_meters
@@ -773,6 +828,10 @@ def main(args):
             aggregator = DualProj()
         elif agg_name == "jd_sum":
             aggregator = Sum()
+        elif agg_name == "nupgrad":
+            aggregator = NUPGrad()
+        elif agg_name == "pnupgrad":
+            aggregator = PNUPGrad()
         elif agg_name == "sum":
             aggregator = "sum"
         else:

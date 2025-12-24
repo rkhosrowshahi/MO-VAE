@@ -294,7 +294,12 @@ class VQVAE2(nn.Module):
         enc_t = self.enc_top(enc_b)    # [B, embedding_dim, H/8, W/8]
         
         # 3. VQ Top
-        quant_t, diff_t, id_t = self.vq_top(enc_t)
+        vq_top_output = self.vq_top(enc_t)
+        if len(vq_top_output) == 4:
+            quant_t, diff_t, id_t, encoding_inds_top = vq_top_output
+        else:
+            quant_t, diff_t, id_t = vq_top_output
+            encoding_inds_top = None
         
         # 4. Decode Top to get conditioning for bottom
         dec_t = self.dec_top(quant_t) # [B, bottom_dim, H/4, W/4]
@@ -306,7 +311,12 @@ class VQVAE2(nn.Module):
         quant_b_input = self.bottom_pre_vq(enc_b) # [B, embedding_dim, H/4, W/4]
         
         # 6. VQ Bottom
-        quant_b, diff_b, id_b = self.vq_bottom(quant_b_input)
+        vq_bottom_output = self.vq_bottom(quant_b_input)
+        if len(vq_bottom_output) == 4:
+            quant_b, diff_b, id_b, encoding_inds_bottom = vq_bottom_output
+        else:
+            quant_b, diff_b, id_b = vq_bottom_output
+            encoding_inds_bottom = None
         
         # 7. Decoder Bottom (with conditioning from Top)
         # Concatenate along channel dimension
@@ -322,12 +332,24 @@ class VQVAE2(nn.Module):
              # Based on models/vq_vae.py: returns (quantized, commitment_loss, embedding_loss)
              pass
 
+        # Calculate codebook usage for both codebooks
+        codebook_usage_percentage = 0.0
+        if encoding_inds_top is not None and encoding_inds_bottom is not None:
+            # Combine both codebooks for overall utilization
+            # For VQVAE2, we typically report the average or combined utilization
+            usage_top = self.vq_top.get_codebook_usage_percentage_from_indices(encoding_inds_top)
+            usage_bottom = self.vq_bottom.get_codebook_usage_percentage_from_indices(encoding_inds_bottom)
+            codebook_usage_percentage = (usage_top + usage_bottom) / 2.0
+        
         outputs = {
             "recons": recons,
             "quantized_top": quant_t,
             "quantized_bottom": quant_b,
             "commitment_loss": commitment_loss,
             "embedding_loss": embedding_loss,
+            "codebook_usage_percentage": codebook_usage_percentage,
+            "encoding_inds_top": encoding_inds_top,
+            "encoding_inds_bottom": encoding_inds_bottom,
         }
         
         if getattr(self, "_summary_mode", False):

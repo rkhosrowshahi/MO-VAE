@@ -1,5 +1,7 @@
-configs/imagenet/gg_vq_vae_v3/upgrad/config_2_seed999.yaml
-configs/imagenet/gg_vq_vae_v3/sum/config_2_seed999.yaml
+configs/imagenet/vq_vae/nupgrad/config_seed999.yaml
 configs/imagenet/vq_vae/upgrad/config_seed999.yaml
 configs/imagenet/vq_vae/sum/config_seed999.yaml
+configs/imagenet/gg_vq_vae_v3/nupgrad/config_2_seed999.yaml
+configs/imagenet/gg_vq_vae_v3/upgrad/config_2_seed999.yaml
+configs/imagenet/gg_vq_vae_v3/sum/config_2_seed999.yaml
 

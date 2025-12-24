@@ -1,0 +1,38 @@
+# ImageNet VAE Configuration - NUpGrad Aggregator (BCE + KLD)
+# This configuration trains a VAE on ImageNet dataset with BCE mean and KL objectives
+
+
+# Dataset settings
+dataset: imagenet
+data_dir: ../data
+normalize: false
+# Model architecture
+arch: vae
+latent_dim: 128
+hidden_dims: [32, 64, 128, 256, 512]
+loss_weights: [1.0, 8.138e-05]
+recons_dist: bernoulli
+recons_reduction: mean
+# Training settings
+epochs: 20
+batch_size: 128
+optimizer: adam
+lr: 2e-4
+wd: 0.0
+aggregator: nupgrad
+seed: 999
+device: cuda:5
+num_workers: 8
+# Logging settings
+save_path: logs/
+save_freq: 1
+eval_freq: 1
+num_samples: 4
+# Hypervolume reference points (VAE has 2 objectives: reconstruction_loss, kl_loss)
+hv_ref: [1.1, 1.1]
+# Wandb settings
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: imagenet 128d 1*bce+8.138e-05*kld nupgrad seed999
+

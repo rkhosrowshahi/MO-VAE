@@ -1,0 +1,39 @@
+# CelebA-HQ VQ-VAE Configuration - NUpGrad Aggregator (BCE)
+# This configuration trains a VQ-VAE on CelebA-HQ dataset with BCE mean objectives
+# Dataset settings
+
+# Dataset settings
+dataset: CelebA-HQ
+data_dir: ../data
+normalize: false
+# Model architecture
+arch: vq_vae
+embedding_dim: 64
+num_embeddings: 512
+hidden_dims: [128, 256]
+loss_weights: [1.0, 1.0, 0.25]
+recons_dist: bernoulli
+recons_reduction: mean
+# Hypervolume reference points (VQ-VAE has 3 objectives: reconstruction_loss, embedding_loss, commitment_loss)
+hv_ref: [1.1, 1.1, 1.1]
+# Training settings
+epochs: 200
+batch_size: 128
+optimizer: adam
+lr: 2e-4
+wd: 0.0
+aggregator: nupgrad
+seed: 999
+device: cuda:0
+num_workers: 8
+# Logging settings
+save_path: logs/
+save_freq: 10
+eval_freq: 1
+num_samples: 4
+# Wandb settings
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: celeba-hq vq_vae 512k 64d nupgrad [1*bce + 1*embedding + 0.25*commitment] seed999
+

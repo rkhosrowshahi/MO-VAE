@@ -1,0 +1,8 @@
+configs/celeba/vq_vae/upgrad/bce_seed999.yaml
+configs/celeba/vq_vae/sum/bce_seed999.yaml
+configs/celeba/gg_vq_vae_v3/upgrad/config_1_seed999.yaml
+configs/celeba/gg_vq_vae_v3/sum/config_1_seed999.yaml
+configs/celeba/gg_vq_vae_v3/upgrad/config_2_seed999.yaml
+configs/celeba/gg_vq_vae_v3/sum/config_2_seed999.yaml
+configs/celeba/gg_vq_vae_v3/upgrad/config_3_seed999.yaml
+configs/celeba/gg_vq_vae_v3/sum/config_3_seed999.yaml

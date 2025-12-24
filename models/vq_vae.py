@@ -60,7 +60,9 @@ class VectorQuantizer(nn.Module):
         if getattr(self, "_summary_mode", False):
             return quantized_latents
 
-        return quantized_latents, commitment_loss, embedding_loss
+        # Return encoding indices for codebook usage calculation
+        encoding_inds_flat = encoding_inds.squeeze(1)  # [BHW]
+        return quantized_latents, commitment_loss, embedding_loss, encoding_inds_flat
     
     def get_used_embeddings(self, latents: Tensor) -> Tensor:
         """
@@ -100,6 +102,22 @@ class VectorQuantizer(nn.Module):
         """
         used_embeddings = self.get_used_embeddings(latents)
         num_used = used_embeddings.size(0)
+        percentage = (num_used / self.K) * 100.0
+        return float(percentage)
+    
+    def get_codebook_usage_percentage_from_indices(self, encoding_inds: Tensor) -> float:
+        """
+        Calculate the percentage of K embeddings that are filled (used) from encoding indices.
+        
+        Args:
+            encoding_inds: Encoding indices [BHW] or [B*H*W]
+            
+        Returns:
+            Percentage (0-100) of embeddings that are used
+        """
+        # Get unique indices
+        unique_inds = torch.unique(encoding_inds)
+        num_used = unique_inds.size(0)
         percentage = (num_used / self.K) * 100.0
         return float(percentage)
 
@@ -345,13 +363,27 @@ class VQVAE(nn.Module):
         vq_outputs = self.vq_layer(encoding)
 
         if isinstance(vq_outputs, tuple):
-            quantized_inputs, commitment_loss, embedding_loss = vq_outputs
+            if len(vq_outputs) == 4:
+                # New format: (quantized_inputs, commitment_loss, embedding_loss, encoding_inds)
+                quantized_inputs, commitment_loss, embedding_loss, encoding_inds = vq_outputs
+                # Calculate percentage of K embeddings that are filled using actual indices
+                codebook_usage_percentage = self.vq_layer.get_codebook_usage_percentage_from_indices(encoding_inds)
+            elif len(vq_outputs) == 3:
+                # Old format: (quantized_inputs, commitment_loss, embedding_loss)
+                quantized_inputs, commitment_loss, embedding_loss = vq_outputs
+                encoding_inds = None
+                # Fallback to recomputing from latents
+                codebook_usage_percentage = self.vq_layer.get_codebook_usage_percentage(encoding)
+            else:
+                quantized_inputs = vq_outputs
+                commitment_loss, embedding_loss = None, None
+                encoding_inds = None
+                codebook_usage_percentage = 0.0
         else:
             quantized_inputs = vq_outputs
             commitment_loss, embedding_loss = None, None
-
-        # Calculate percentage of K embeddings that are filled
-        codebook_usage_percentage = self.vq_layer.get_codebook_usage_percentage(encoding)
+            encoding_inds = None
+            codebook_usage_percentage = 0.0
 
         outputs = {
             "recons": self.decode(quantized_inputs),
@@ -360,6 +392,7 @@ class VQVAE(nn.Module):
             "commitment_loss": commitment_loss,
             "embedding_loss": embedding_loss,
             "codebook_usage_percentage": codebook_usage_percentage,
+            "encoding_inds": encoding_inds,  # Store indices for accumulation across batches
         }
         if getattr(self, "_summary_mode", False):
             return outputs["recons"]

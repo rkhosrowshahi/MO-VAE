@@ -1,0 +1,13 @@
+configs/celeba-hq/vq_vae/nupgrad/config_seed999.yaml
+configs/celeba-hq/vq_vae/upgrad/config_seed999.yaml
+configs/celeba-hq/vq_vae/sum/config_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/nupgrad/config_3_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/upgrad/config_3_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/sum/config_3_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/nupgrad/config_2_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/upgrad/config_2_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/sum/config_2_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/nupgrad/config_1_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/upgrad/config_1_seed999.yaml
+configs/celeba-hq/gg_vq_vae_v3/sum/config_1_seed999.yaml
+

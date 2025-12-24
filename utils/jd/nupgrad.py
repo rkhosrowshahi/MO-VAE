@@ -4,7 +4,7 @@ import torch
 from torch import Tensor
 
 from torchjd.aggregation._aggregator_bases import GramianWeightedAggregator
-from torchjd.aggregation._mean import _MeanWeighting
+from torchjd.aggregation._mean import MeanWeighting
 from torchjd.aggregation._utils.dual_cone import project_weights
 from torchjd.aggregation._utils.gramian import normalize, regularize
 from torchjd.aggregation._utils.non_differentiable import raise_non_differentiable_error
@@ -47,7 +47,7 @@ class NUPGrad(GramianWeightedAggregator):
         reg_eps: float = 0.0001,
         solver: Literal["quadprog"] = "quadprog",
     ):
-        weighting = pref_vector_to_weighting(pref_vector, default=_MeanWeighting())
+        weighting = pref_vector_to_weighting(pref_vector, default=MeanWeighting())
         self._pref_vector = pref_vector
         self._norm_eps = norm_eps
         self._reg_eps = reg_eps

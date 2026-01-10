@@ -1,0 +1,4 @@
+configs/celeba/vq_vae/nupgrad/bce_seed999.yaml
+configs/celeba/vq_vae/upgrad/bce_seed999.yaml
+configs/celeba/vq_vae/sum/bce_seed999.yaml
+

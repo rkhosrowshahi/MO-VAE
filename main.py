@@ -297,9 +297,16 @@ def evaluate(net, data_loader, device, args):
                 batch_psnr = psnr(images, recons)
                 psnr_meter.update(batch_psnr, n=images.size(0))
                 
-                # Compute LPIPS per batch
-                batch_lpips = lpips(images, recons, device=device)
-                lpips_meter.update(batch_lpips, n=images.size(0))
+                # Compute LPIPS per batch (uses VGG16, may fail for very small images)
+                # Skip LPIPS for images < 64x64 to avoid unreliable results
+                img_size = images.size(-1)  # Assuming square images
+                if img_size >= 64:
+                    try:
+                        batch_lpips = lpips(images, recons, device=device)
+                        lpips_meter.update(batch_lpips, n=images.size(0))
+                    except Exception as e:
+                        # Silently skip LPIPS if it fails (e.g., for very small images)
+                        pass
                 
                 # Collect images for FID (limit to avoid memory issues)
                 max_fid_samples = args.max_fid_samples
@@ -530,11 +537,14 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     Evaluate all generative model metrics on generated samples.
     
     Generates samples from the model and computes comprehensive evaluation metrics:
-    - SSIM, SSNR, PSNR, LPIPS: Perceptual and pixel-level quality metrics (comparing generated vs real)
-    - FID: Fréchet Inception Distance between generated and real image distributions
-    - IS: Inception Score measuring quality and diversity of generated images
-    - Precision: Fraction of generated images that are realistic
-    - Recall: Fraction of real images covered by the generated distribution
+    - SSIM, SSNR, PSNR: Pixel-based quality metrics (always computed, comparing generated vs real)
+    - LPIPS: Perceptual similarity using VGG16 (requires images >= 64x64)
+    - FID: Fréchet Inception Distance using InceptionV3 (requires images >= 64x64)
+    - IS: Inception Score using InceptionV3 (requires images >= 64x64)
+    - Precision/Recall: Using InceptionV3 features (requires images >= 64x64)
+    
+    Note: ImageNet-pretrained metrics (LPIPS, FID, IS, Precision/Recall) are automatically
+    skipped for images smaller than 64x64 to avoid unreliable results from upsampling artifacts.
     
     Args:
         net: The neural network model (must have a sample() method)
@@ -544,16 +554,16 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             - max_gen_metrics_samples: Maximum number of samples to generate/use
             
     Returns:
-        dict: Dictionary containing all computed metrics:
+        dict: Dictionary containing all computed metrics (NaN for skipped metrics):
             - 'ssim': Structural Similarity Index (higher is better, range 0-1)
             - 'ssnr': Signal-to-Noise Ratio in dB (higher is better)
             - 'psnr': Peak Signal-to-Noise Ratio in dB (higher is better)
-            - 'lpips': Learned Perceptual Image Patch Similarity (lower is better)
-            - 'fid': Fréchet Inception Distance (lower is better)
-            - 'inception_score_mean': Mean IS across splits (higher is better)
-            - 'inception_score_std': Standard deviation of IS
-            - 'precision': Precision score (0-1, higher is better)
-            - 'recall': Recall score (0-1, higher is better)
+            - 'lpips': Learned Perceptual Image Patch Similarity (lower is better, NaN if skipped)
+            - 'fid': Fréchet Inception Distance (lower is better, NaN if skipped)
+            - 'inception_score_mean': Mean IS across splits (higher is better, NaN if skipped)
+            - 'inception_score_std': Standard deviation of IS (NaN if skipped)
+            - 'precision': Precision score (0-1, higher is better, NaN if skipped)
+            - 'recall': Recall score (0-1, higher is better, NaN if skipped)
     """
     tqdm.write("Evaluating all generative metrics (SSIM, SSNR, PSNR, LPIPS, FID, IS, Precision, Recall)...")
     
@@ -599,12 +609,27 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     generated_images = generated_images.to(device)
     real_images = real_images.to(device)
     
-    # Compute SSIM, SSNR, PSNR, LPIPS (paired comparison between generated and real)
-    tqdm.write("Computing SSIM, SSNR, PSNR, LPIPS...")
+    # Check image size - ImageNet-pretrained models may not work well with very small images
+    # Note: CelebA-HQ and ImageNet are typically 256x256, which works fine with ImageNet metrics
+    # Regular CelebA is often 64x64, which requires skipping ImageNet-pretrained metrics
+    img_size = generated_images.size(-1)  # Assuming square images
+    min_size_for_imagenet_metrics = 64  # Minimum size for reliable ImageNet-pretrained metrics
+    
+    if img_size < min_size_for_imagenet_metrics:
+        tqdm.write(f"Warning: Image size ({img_size}x{img_size}) is too small for ImageNet-pretrained metrics.")
+        tqdm.write(f"Skipping FID, IS, LPIPS, Precision/Recall (require >= {min_size_for_imagenet_metrics}x{min_size_for_imagenet_metrics}).")
+        tqdm.write(f"Computing only pixel-based metrics: SSIM, SSNR, PSNR")
+    elif img_size < 128:
+        tqdm.write(f"Note: Image size ({img_size}x{img_size}) is smaller than typical ImageNet size (224x224 or 299x299).")
+        tqdm.write(f"ImageNet-pretrained metrics will upsample images, which may affect reliability.")
+    elif img_size >= 256:
+        tqdm.write(f"Image size ({img_size}x{img_size}) is suitable for all metrics (including ImageNet-pretrained).")
+    
+    # Compute SSIM, SSNR, PSNR (always computed - pixel-based metrics)
+    tqdm.write("Computing SSIM, SSNR, PSNR...")
     ssim_value = float('nan')
     ssnr_value = float('nan')
     psnr_value = float('nan')
-    lpips_value = float('nan')
     
     try:
         # Compute metrics by comparing corresponding generated and real images
@@ -613,7 +638,6 @@ def evaluate_generative_metrics(net, test_loader, device, args):
         ssim_values = []
         ssnr_values = []
         psnr_values = []
-        lpips_values = []
         
         for i in range(0, num_samples, batch_size_metric):
             end_idx = min(i + batch_size_metric, num_samples)
@@ -624,19 +648,13 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             batch_ssim = ssim(real_batch, gen_batch, size_average=False)
             ssim_values.append(batch_ssim.cpu())
             
-            # SSNR - returns single float per batch, compute per image by processing individually
-            # For efficiency, we'll compute batch average
+            # SSNR - returns single float per batch
             batch_ssnr = ssnr(real_batch, gen_batch)
             ssnr_values.append(batch_ssnr)
             
-            # PSNR - returns single float per batch, compute per image by processing individually
-            # For efficiency, we'll compute batch average
+            # PSNR - returns single float per batch
             batch_psnr = psnr(real_batch, gen_batch)
             psnr_values.append(batch_psnr)
-            
-            # LPIPS - returns single float per batch
-            batch_lpips = lpips(real_batch, gen_batch, device=device)
-            lpips_values.append(batch_lpips)
         
         # Average SSIM (it returns per-image values)
         if len(ssim_values) > 0:
@@ -647,50 +665,77 @@ def evaluate_generative_metrics(net, test_loader, device, args):
         # Average other metrics (they return batch averages)
         ssnr_value = np.mean(ssnr_values) if ssnr_values else float('nan')
         psnr_value = np.mean(psnr_values) if psnr_values else float('nan')
-        lpips_value = np.mean(lpips_values) if lpips_values else float('nan')
         
     except Exception as e:
-        tqdm.write(f"Warning: SSIM/SSNR/PSNR/LPIPS computation failed: {e}")
+        tqdm.write(f"Warning: SSIM/SSNR/PSNR computation failed: {e}")
     
-    # Compute FID
-    tqdm.write("Computing FID...")
+    # Compute LPIPS (uses VGG16, requires >= 64x64 for reliability)
+    lpips_value = float('nan')
+    if img_size >= min_size_for_imagenet_metrics:
+        tqdm.write("Computing LPIPS...")
+        try:
+            batch_size_metric = 50
+            lpips_values = []
+            for i in range(0, num_samples, batch_size_metric):
+                end_idx = min(i + batch_size_metric, num_samples)
+                gen_batch = generated_images[i:end_idx]
+                real_batch = real_images[i:end_idx]
+                batch_lpips = lpips(real_batch, gen_batch, device=device)
+                lpips_values.append(batch_lpips)
+            lpips_value = np.mean(lpips_values) if lpips_values else float('nan')
+        except Exception as e:
+            tqdm.write(f"Warning: LPIPS computation failed: {e}")
+    else:
+        tqdm.write("Skipping LPIPS: Image size too small for reliable VGG16 features.")
+    
+    # Compute FID (uses InceptionV3, requires >= 64x64 for reliability)
     fid_value = float('nan')
-    try:
-        fid_value = calculate_fid(
-            real_images.cpu(), 
-            generated_images.cpu(), 
-            device=device, 
-            batch_size=50
-        )
-    except Exception as e:
-        tqdm.write(f"Warning: FID computation failed: {e}")
+    if img_size >= min_size_for_imagenet_metrics:
+        tqdm.write("Computing FID...")
+        try:
+            fid_value = calculate_fid(
+                real_images.cpu(), 
+                generated_images.cpu(), 
+                device=device, 
+                batch_size=50
+            )
+        except Exception as e:
+            tqdm.write(f"Warning: FID computation failed: {e}")
+    else:
+        tqdm.write("Skipping FID: Image size too small for reliable InceptionV3 features.")
     
-    # Compute Inception Score
-    tqdm.write("Computing Inception Score...")
+    # Compute Inception Score (uses InceptionV3, requires >= 64x64 for reliability)
     is_mean = float('nan')
     is_std = float('nan')
-    try:
-        is_mean, is_std = calculate_inception_score(
-            generated_images.cpu(), 
-            device=device, 
-            batch_size=50
-        )
-    except Exception as e:
-        tqdm.write(f"Warning: Inception Score computation failed: {e}")
+    if img_size >= min_size_for_imagenet_metrics:
+        tqdm.write("Computing Inception Score...")
+        try:
+            is_mean, is_std = calculate_inception_score(
+                generated_images.cpu(), 
+                device=device, 
+                batch_size=50
+            )
+        except Exception as e:
+            tqdm.write(f"Warning: Inception Score computation failed: {e}")
+    else:
+        tqdm.write("Skipping IS: Image size too small for reliable InceptionV3 predictions.")
     
-    # Compute Precision and Recall
-    tqdm.write("Computing Precision and Recall...")
+    # Compute Precision and Recall (uses InceptionV3, requires >= 64x64 for reliability)
     precision = float('nan')
     recall = float('nan')
-    try:
-        precision, recall = calculate_precision_recall(
-            real_images.cpu(), 
-            generated_images.cpu(), 
-            device=device, 
-            batch_size=50
-        )
-    except Exception as e:
-        tqdm.write(f"Warning: Precision/Recall computation failed: {e}")
+    if img_size >= min_size_for_imagenet_metrics:
+        tqdm.write("Computing Precision and Recall...")
+        try:
+            precision, recall = calculate_precision_recall(
+                real_images.cpu(), 
+                generated_images.cpu(), 
+                device=device, 
+                batch_size=50
+            )
+        except Exception as e:
+            tqdm.write(f"Warning: Precision/Recall computation failed: {e}")
+    else:
+        tqdm.write("Skipping Precision/Recall: Image size too small for reliable InceptionV3 features.")
     
     metrics = {
         'ssim': ssim_value,
@@ -860,6 +905,7 @@ def main(args):
             name=args.wandb_name if args.wandb_name else None,
             config=vars(args),
             dir=save_root,
+            group=args.wandb_group if args.wandb_group else None,
             tags=args.wandb_tags if args.wandb_tags else None,
         )
 
@@ -1122,6 +1168,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_project", type=str, default="mo-vae")
     parser.add_argument("--wandb_entity", type=str, default=None)
     parser.add_argument("--wandb_name", type=str, default=None)
+    parser.add_argument("--wandb_group", type=str, default=None)
     parser.add_argument("--wandb_tags", type=str, nargs="+", default=None)
     parser.add_argument("--max_fid_samples", type=int, default=5000, help="Maximum number of samples to use for FID computation")
     parser.add_argument("--max_gen_metrics_samples", type=int, default=5000, help="Maximum number of samples to use for IS, Precision, and Recall computation")

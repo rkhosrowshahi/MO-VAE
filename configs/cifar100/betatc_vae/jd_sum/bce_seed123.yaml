@@ -35,5 +35,6 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: cifar100 128d betatc_vae bce jd_sum seed123
+wandb_group: cifar100 128d betatc_vae bce jd_sum
 anneal_steps: 10000
 

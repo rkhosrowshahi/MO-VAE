@@ -33,4 +33,5 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba 128d bce+kld pcgrad seed123
+wandb_group: celeba 128d bce+kld pcgrad
 

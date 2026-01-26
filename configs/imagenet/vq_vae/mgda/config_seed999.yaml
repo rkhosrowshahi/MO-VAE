@@ -34,5 +34,5 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: imagenet vq_vae 512k 64d mgda [1*bce + 1*embedding + 0.25*commitment] seed999
-wandb_group: imagenet vq_vae mgda seeds
+wandb_group: imagenet vq_vae 512k 64d mgda [1*bce + 1*embedding + 0.25*commitment]
 

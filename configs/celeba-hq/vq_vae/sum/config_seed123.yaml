@@ -34,4 +34,5 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba-hq vq_vae 512k 64d sum [1*bce + 1*embedding + 0.25*commitment] seed123
+wandb_group: celeba-hq vq_vae 512k 64d sum [1*bce + 1*embedding + 0.25*commitment]
 

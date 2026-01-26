@@ -33,5 +33,6 @@ hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: cifar100 gg_vq_vae_v2 nupgrad bernoulli 512k 64d seed42 run3
+wandb_name: cifar100 gg_vq_vae_v2 nupgrad bernoulli 512k 64d seed42 run3 seed999
+wandb_group: cifar100 gg_vq_vae_v2 nupgrad bernoulli 512k 64d seed42 run3
 

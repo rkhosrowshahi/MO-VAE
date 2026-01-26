@@ -33,4 +33,5 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: imagenet 128d 1*bce+0.00025*kld upgrad seed123
+wandb_group: imagenet 128d 1*bce+0.00025*kld upgrad
 

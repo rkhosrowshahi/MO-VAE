@@ -34,4 +34,5 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: cifar100 gg_vq_vae_v2 upgrad bernoulli 512k 64d seed42 run2
+wandb_group: cifar100 gg_vq_vae_v2 upgrad bernoulli 512k 64d run2
 

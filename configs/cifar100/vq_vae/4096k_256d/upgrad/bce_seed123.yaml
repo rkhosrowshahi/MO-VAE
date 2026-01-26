@@ -34,4 +34,5 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: cifar100 vq_vae 4096k 256d bce upgrad seed123
+wandb_group: cifar100 vq_vae 4096k 256d bce upgrad
 

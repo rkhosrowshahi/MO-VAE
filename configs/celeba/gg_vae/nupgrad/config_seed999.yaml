@@ -33,4 +33,5 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba gg_vae 128d nupgrad 1*bce + 8.138e-05*kld + 1*gradient_guided + 1*edge_matching seed999
+wandb_group: celeba gg_vae 128d nupgrad 1*bce + 8.138e-05*kld + 1*gradient_guided + 1*edge_matching
 

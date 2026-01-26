@@ -32,5 +32,6 @@ hv_ref: [1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: imagenet 128d 1*bce+0.00025*kld upgrad
+wandb_name: imagenet 128d 1*bce+0.00025*kld upgrad seed42
+wandb_group: imagenet 128d 1*bce+0.00025*kld upgrad
 

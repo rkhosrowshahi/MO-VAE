@@ -32,5 +32,6 @@ hv_ref: [1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: cifar100 128d bce+kld CAGrad
+wandb_name: cifar100 128d bce+kld CAGrad seed42
+wandb_group: cifar100 128d bce+kld CAGrad
 

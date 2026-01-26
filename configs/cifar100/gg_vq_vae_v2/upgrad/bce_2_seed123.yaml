@@ -22,8 +22,6 @@ lr: 3e-4
 wd: 0.0
 aggregator: upgrad
 seed: 123
-device: cuda:0
-num_workers: 0
 # Logging settings
 save_path: logs/
 save_freq: 10

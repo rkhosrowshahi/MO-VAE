@@ -21,8 +21,6 @@ lr: 2e-4
 wd: 0.0
 aggregator: nupgrad
 seed: 123
-device: cuda:5
-num_workers: 8
 # Logging settings
 save_path: logs/
 save_freq: 1

@@ -23,8 +23,6 @@ lr: 0.001
 wd: 0.0
 aggregator: sum
 seed: 999
-device: cuda:0
-num_workers: 4
 # Logging settings
 save_path: logs/
 save_freq: 10

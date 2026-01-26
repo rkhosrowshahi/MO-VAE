@@ -21,7 +21,6 @@ lr: 0.001
 wd: 0.0
 aggregator: mgda
 seed: 999
-device: cuda:0
 # Logging settings
 save_path: logs/
 save_freq: 10

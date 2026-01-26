@@ -24,8 +24,6 @@ aggregator: mgda_loss
 mgda_epsilon: 1e-5
 mgda_max_iters: 250
 seed: 42
-device: cuda:0
-num_workers: 8
 #
 # Logging settings
 save_path: logs/

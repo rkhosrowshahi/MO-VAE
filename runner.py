@@ -37,6 +37,9 @@ def yaml_to_args(config):
         'reg_eps': 'agg_reg_eps',
     }
     
+    # Keys to exclude from YAML (handled via command-line arguments instead)
+    exclude_keys = {'device', 'num_workers'}
+    
     def get_arg_name(key):
         """Convert YAML key to command-line argument name."""
         # First check if it's an alias
@@ -45,6 +48,10 @@ def yaml_to_args(config):
         return f'--{canonical_key}'
     
     for key, value in config.items():
+        # Skip excluded keys
+        if key in exclude_keys:
+            continue
+            
         arg_name = get_arg_name(key)
         
         # Handle boolean flags
@@ -66,7 +73,7 @@ def yaml_to_args(config):
     return args
 
 
-def run_single_config(config_file):
+def run_single_config(config_file, gpu_id=None, num_workers=None):
     """Run a single YAML configuration file."""
     # Load YAML config
     try:
@@ -77,6 +84,12 @@ def run_single_config(config_file):
     
     # Convert to command-line arguments
     cmd_args = yaml_to_args(config)
+    
+    # Add device and num_workers arguments if provided
+    if gpu_id is not None:
+        cmd_args.extend(['--device', f'cuda:{gpu_id}'])
+    if num_workers is not None:
+        cmd_args.extend(['--num_workers', str(num_workers)])
     
     # Build command
     cmd = [sys.executable, 'main.py'] + cmd_args
@@ -127,6 +140,20 @@ Examples:
         type=str,
         help='Path to a text file containing YAML file paths (one per line)'
     )
+    parser.add_argument(
+        '--gpu_id', '--gpu',
+        dest='gpu_id',
+        type=int,
+        default=None,
+        help='GPU ID to use (e.g., 0 for cuda:0). If not provided, main.py will use its default device'
+    )
+    parser.add_argument(
+        '--num_workers', '--workers',
+        dest='num_workers',
+        type=int,
+        default=None,
+        help='Number of worker processes for data loading. If not provided, main.py will use its default num_workers'
+    )
     
     args = parser.parse_args()
     
@@ -163,7 +190,7 @@ Examples:
     failed_files = []
     for i, config_file in enumerate(config_files, 1):
         print(f"\n[{i}/{len(config_files)}] Processing: {config_file}")
-        success = run_single_config(config_file)
+        success = run_single_config(config_file, gpu_id=args.gpu_id, num_workers=args.num_workers)
         if not success:
             failed_files.append(config_file)
     

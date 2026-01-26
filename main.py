@@ -18,15 +18,15 @@ from torchjd.aggregation import (
     UPGrad,
     PCGrad,
     Mean,
-    AlignedMTL,
+    # AlignedMTL,
     NashMTL,
     IMTLG,
-    MGDA,
+    # MGDA,
     CAGrad,
     DualProj,
     Sum
 )
-from utils.jd import NUPGrad, PNUPGrad
+from utils.jd import NUPGrad, PNUPGrad, AlignedMTL, MGDA
 
 import wandb
 from pymoo.indicators.hv import HV

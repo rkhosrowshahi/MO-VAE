@@ -30,6 +30,20 @@ def ssim(img1, img2, window_size=11, size_average=True):
         torch.Tensor: SSIM value(s). If size_average=True, returns scalar tensor.
                      If size_average=False, returns tensor of shape (B,).
     """
+    # Handle empty tensors
+    if img1.numel() == 0 or img2.numel() == 0:
+        # Determine device and dtype from non-empty tensor, or use img1 as fallback
+        device = img1.device if img1.numel() > 0 else img2.device
+        dtype = img1.dtype if img1.numel() > 0 else img2.dtype
+        if size_average:
+            return torch.tensor(float('nan'), device=device, dtype=dtype)
+        else:
+            # Get batch size from non-empty tensor
+            batch_size = img1.size(0) if img1.numel() > 0 else (img2.size(0) if img2.numel() > 0 else 0)
+            if batch_size == 0:
+                return torch.tensor([], device=device, dtype=dtype)
+            return torch.full((batch_size,), float('nan'), device=device, dtype=dtype)
+    
     # Normalize to [0, 1] if in [-1, 1] range
     if img1.min() < 0:
         img1 = (img1 + 1) / 2
@@ -107,14 +121,18 @@ def ssnr(img1, img2):
         float: Average SSNR value in dB across the batch. Higher is better.
     """
     # Normalize to [0, 1] if in [-1, 1] range
-    if img1.min() < 0:
+    if img1.numel() > 0 and img1.min() < 0:
         img1 = (img1 + 1) / 2
-    if img2.min() < 0:
+    if img2.numel() > 0 and img2.min() < 0:
         img2 = (img2 + 1) / 2
     
     # Clamp to valid range
     img1 = torch.clamp(img1, 0, 1)
     img2 = torch.clamp(img2, 0, 1)
+    
+    # Handle empty tensors
+    if img1.numel() == 0 or img2.numel() == 0:
+        return float('nan')
     
     # Compute signal power (variance of original image)
     signal_power = torch.var(img1, dim=[1, 2, 3])  # (B,)
@@ -159,14 +177,18 @@ def psnr(img1, img2, max_val=1.0):
                values indicating better quality.
     """
     # Normalize to [0, 1] if in [-1, 1] range
-    if img1.min() < 0:
+    if img1.numel() > 0 and img1.min() < 0:
         img1 = (img1 + 1) / 2
-    if img2.min() < 0:
+    if img2.numel() > 0 and img2.min() < 0:
         img2 = (img2 + 1) / 2
     
     # Clamp to valid range
     img1 = torch.clamp(img1, 0, 1)
     img2 = torch.clamp(img2, 0, 1)
+    
+    # Handle empty tensors
+    if img1.numel() == 0 or img2.numel() == 0:
+        return float('nan')
     
     # Compute MSE per image
     mse = torch.mean((img1 - img2) ** 2, dim=[1, 2, 3])  # (B,)
@@ -233,6 +255,10 @@ class VGGFeatureExtractor(nn.Module):
         # Clear previous outputs
         self.layer_outputs = {}
         
+        # Handle empty tensors
+        if x.numel() == 0:
+            return {}
+        
         # Normalize to [0, 1] if in [-1, 1] range
         if x.min() < 0:
             x = (x + 1) / 2
@@ -292,6 +318,10 @@ def lpips(img1, img2, device='cuda', net='vgg'):
     with torch.no_grad():
         features1 = feature_extractor(img1)
         features2 = feature_extractor(img2)
+    
+    # Handle empty tensors
+    if len(features1) == 0 or len(features2) == 0:
+        return float('nan')
     
     # Compute LPIPS distance for each layer and average
     lpips_scores = []
@@ -359,6 +389,10 @@ class InceptionV3(nn.Module):
         Returns:
             torch.Tensor: Feature vectors of shape (B, 2048)
         """
+        # Handle empty tensors
+        if x.numel() == 0:
+            return torch.empty((0, 2048), device=x.device, dtype=x.dtype)
+        
         # Resize to 299x299 if needed
         if x.size(-1) != 299 or x.size(-2) != 299:
             x = F.interpolate(x, size=(299, 299), mode='bilinear', align_corners=False)
@@ -434,6 +468,10 @@ class InceptionV3ForIS(nn.Module):
         Returns:
             torch.Tensor: Class logits of shape (B, 1000)
         """
+        # Handle empty tensors
+        if x.numel() == 0:
+            return torch.empty((0, 1000), device=x.device, dtype=x.dtype)
+        
         # Resize to 299x299 if needed
         if x.size(-1) != 299 or x.size(-2) != 299:
             x = F.interpolate(x, size=(299, 299), mode='bilinear', align_corners=False)
@@ -479,6 +517,10 @@ def calculate_fid(real_images, fake_images, device='cuda', batch_size=50):
         float: FID distance. Lower is better, with 0 being the theoretical lower bound
                (achieved when distributions are identical).
     """
+    # Handle empty inputs
+    if real_images.numel() == 0 or fake_images.numel() == 0:
+        return float('nan')
+    
     inception = InceptionV3(device=device)
     inception.eval()
     
@@ -487,12 +529,20 @@ def calculate_fid(real_images, fake_images, device='cuda', batch_size=50):
         with torch.no_grad():
             for i in range(0, len(images), batch_size):
                 batch = images[i:i+batch_size].to(device)
+                if batch.numel() == 0:
+                    continue
                 features = inception(batch)
                 features_list.append(features.cpu())
+        if len(features_list) == 0:
+            return np.array([])
         return torch.cat(features_list, dim=0).numpy()
     
     real_features = get_features(real_images)
     fake_features = get_features(fake_images)
+    
+    # Handle empty feature arrays
+    if len(real_features) == 0 or len(fake_features) == 0:
+        return float('nan')
     
     # Calculate mean and covariance
     mu1, sigma1 = real_features.mean(axis=0), np.cov(real_features, rowvar=False)
@@ -553,6 +603,10 @@ def calculate_inception_score(images, device='cuda', batch_size=50, splits=10):
         tuple: (mean_is, std_is) where mean_is is the average IS across splits and
                std_is is the standard deviation. Higher is better.
     """
+    # Handle empty inputs
+    if images.numel() == 0:
+        return float('nan'), float('nan')
+    
     inception = InceptionV3ForIS(device=device)
     inception.eval()
     
@@ -561,9 +615,14 @@ def calculate_inception_score(images, device='cuda', batch_size=50, splits=10):
     with torch.no_grad():
         for i in range(0, len(images), batch_size):
             batch = images[i:i+batch_size].to(device)
+            if batch.numel() == 0:
+                continue
             logits = inception(batch)
             probs = F.softmax(logits, dim=1)
             preds.append(probs.cpu().numpy())
+    
+    if len(preds) == 0:
+        return float('nan'), float('nan')
     
     preds = np.concatenate(preds, axis=0)
     num_images = preds.shape[0]
@@ -615,6 +674,10 @@ def calculate_precision_recall(real_images, fake_images, device='cuda', batch_si
         tuple: (precision, recall) where both are floats in [0, 1]. Higher is better
                for both metrics.
     """
+    # Handle empty inputs
+    if real_images.numel() == 0 or fake_images.numel() == 0:
+        return float('nan'), float('nan')
+    
     inception = InceptionV3(device=device)
     inception.eval()
     
@@ -623,12 +686,20 @@ def calculate_precision_recall(real_images, fake_images, device='cuda', batch_si
         with torch.no_grad():
             for i in range(0, len(images), batch_size):
                 batch = images[i:i+batch_size].to(device)
+                if batch.numel() == 0:
+                    continue
                 features = inception(batch)
                 features_list.append(features.cpu())
+        if len(features_list) == 0:
+            return np.array([])
         return torch.cat(features_list, dim=0).numpy()
     
     real_features = get_features(real_images)
     fake_features = get_features(fake_images)
+    
+    # Handle empty feature arrays
+    if len(real_features) == 0 or len(fake_features) == 0:
+        return float('nan'), float('nan')
     
     # Compute pairwise distances
     # Distance from each fake image to all real images
@@ -646,6 +717,12 @@ def calculate_precision_recall(real_images, fake_images, device='cuda', batch_si
     
     # Compute k-NN radius for each real sample (distance to k-th nearest real neighbor)
     # Using k-1 index because partition returns 0-indexed positions
+    # Handle case where we don't have enough samples for k-NN
+    if len(real_features) <= k:
+        return float('nan'), float('nan')
+    if len(fake_features) <= k:
+        return float('nan'), float('nan')
+    
     real_knn_radii = np.partition(distances_real_to_real, k-1, axis=1)[:, k-1]
     
     # Compute k-NN radius for each fake sample (distance to k-th nearest fake neighbor)

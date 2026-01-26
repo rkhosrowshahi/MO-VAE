@@ -1,0 +1,6 @@
+configs/celeba-hq/vae/mgda/config.yaml
+configs/celeba-hq/vae/mgda_l2/config.yaml
+configs/celeba-hq/vae/mgda_loss/config.yaml
+configs/celeba-hq/vae/mgda_loss_plus/config.yaml
+configs/celeba-hq/vae/sum/config.yaml
+configs/celeba-hq/vae/upgrad/config.yaml

@@ -1,9 +1,9 @@
-# CelebA-HQ VAE Configuration - UpGrad Aggregator (BCE + KLD)
-# This configuration trains a VAE on CelebA-HQ dataset with BCE mean and KL objectives
-# Dataset settings
+# ImageNet VAE Configuration - MGDA Aggregator (BCE + KLD)
+# This configuration trains a VAE on ImageNet dataset with BCE mean and KL objectives
+
 
 # Dataset settings
-dataset: CelebA-HQ
+dataset: imagenet
 data_dir: ../data
 normalize: false
 # Model architecture
@@ -14,18 +14,20 @@ loss_weights: [1.0, 0.00025]
 recons_dist: bernoulli
 recons_reduction: mean
 # Training settings
-epochs: 100
-batch_size: 64
-optimizer: adamw
-lr: 3e-4
+epochs: 20
+batch_size: 128
+optimizer: adam
+lr: 2e-4
 wd: 0.0
-aggregator: upgrad
-seed: 42
-device: cuda:0
+aggregator: mgda
+mgda_epsilon: 1e-5
+mgda_max_iters: 250
+seed: 999
+device: cuda:5
 num_workers: 8
 # Logging settings
 save_path: logs/
-save_freq: 10
+save_freq: 1
 eval_freq: 1
 num_samples: 4
 # Hypervolume reference points (VAE has 2 objectives: reconstruction_loss, kl_loss)
@@ -34,5 +36,5 @@ hv_ref: [1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba-hq 128d 1*bce+0.00025*kld upgrad
+wandb_name: imagenet 128d 1*bce+0.00025*kld mgda seed999
 

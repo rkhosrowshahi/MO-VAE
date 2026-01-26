@@ -150,22 +150,35 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
         global _current_step
         _current_step = step + 1
         
-        if aggregator is None or aggregator == "sum":
-            total_loss.backward()
-        else:
-            features = None
-            if net.features is not None:
-                features = [outputs[feature] for feature in net.features]
-            
-            if features is not None:
-                mtl_backward(
-                    losses=list(loss_dict.values()),
-                    features=features,
-                    aggregator=aggregator,
-                    retain_graph=True,
-                )
+        try:
+            if aggregator is None or aggregator == "sum":
+                total_loss.backward()
             else:
-                backward(loss_dict.values(), aggregator=aggregator)
+                features = None
+                if net.features is not None:
+                    features = [outputs[feature] for feature in net.features]
+                
+                if features is not None:
+                    mtl_backward(
+                        losses=list(loss_dict.values()),
+                        features=features,
+                        aggregator=aggregator,
+                        retain_graph=True,
+                    )
+                else:
+                    backward(loss_dict.values(), aggregator=aggregator)
+        except RuntimeError as e:
+            # Catch CUDA assertion errors (e.g., from BCE loss with values outside [0,1])
+            # This can happen with Aligned-MTL aggregation
+            if "CUDA" in str(e) or "cuda" in str(e).lower() or "assert" in str(e).lower():
+                tqdm.write(f"Step {step}: CUDA error during backward (likely Aligned-MTL): {str(e)}")
+                tqdm.write(f"  Losses: {loss_dict}")
+                tqdm.write(f"  Skipping this batch...")
+                # Skip optimizer step for this batch
+                continue
+            else:
+                # Re-raise if it's a different RuntimeError
+                raise
 
         # Clip gradients to prevent numerical instabilities
         if args.max_grad_norm is not None:
@@ -569,6 +582,16 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     
     num_samples = args.max_gen_metrics_samples
     
+    # Validate num_samples
+    if num_samples <= 0:
+        tqdm.write(f"Warning: max_gen_metrics_samples is {num_samples}, skipping generative metrics evaluation.")
+        return {
+            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
+            'lpips': float('nan'), 'fid': float('nan'),
+            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan')
+        }
+    
     # Generate samples from the model
     tqdm.write(f"Generating {num_samples} samples from the model...")
     generated_samples = []
@@ -582,9 +605,33 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             if batch_size_actual <= 0:
                 break
             samples = net.sample(num_samples=batch_size_actual, device=device)
+            # Check if samples are valid
+            if samples is None or samples.numel() == 0:
+                tqdm.write(f"Warning: net.sample() returned empty tensor for batch {i}, skipping...")
+                continue
             generated_samples.append(samples.cpu())
     
+    # Check if we have any generated samples
+    if len(generated_samples) == 0:
+        tqdm.write("Error: No samples were generated. Cannot compute generative metrics.")
+        return {
+            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
+            'lpips': float('nan'), 'fid': float('nan'),
+            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan')
+        }
+    
     generated_images = torch.cat(generated_samples, dim=0)[:num_samples]
+    
+    # Validate generated_images
+    if generated_images.numel() == 0:
+        tqdm.write("Error: Generated images tensor is empty. Cannot compute generative metrics.")
+        return {
+            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
+            'lpips': float('nan'), 'fid': float('nan'),
+            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan')
+        }
     
     # Collect real images from test dataset
     tqdm.write(f"Collecting {num_samples} real images from test dataset...")
@@ -596,10 +643,38 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             if collected >= num_samples:
                 break
             take = min(images.size(0), num_samples - collected)
-            real_images.append(images[:take].cpu())
-            collected += take
+            if take > 0:
+                real_images.append(images[:take].cpu())
+                collected += take
+    
+    # Check if we have any real images
+    if len(real_images) == 0:
+        tqdm.write("Error: No real images were collected from test dataset. Cannot compute generative metrics.")
+        return {
+            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
+            'lpips': float('nan'), 'fid': float('nan'),
+            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan')
+        }
     
     real_images = torch.cat(real_images, dim=0)[:num_samples]
+    
+    # Validate real_images
+    if real_images.numel() == 0:
+        tqdm.write("Error: Real images tensor is empty. Cannot compute generative metrics.")
+        return {
+            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
+            'lpips': float('nan'), 'fid': float('nan'),
+            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan')
+        }
+    
+    # Ensure both tensors have the same number of samples
+    min_samples = min(generated_images.size(0), real_images.size(0))
+    if min_samples < num_samples:
+        tqdm.write(f"Warning: Only {min_samples} samples available (requested {num_samples}). Using {min_samples} samples for metrics.")
+        generated_images = generated_images[:min_samples]
+        real_images = real_images[:min_samples]
     
     # Ensure both are in [0, 1] range (metrics functions handle normalization, but let's be safe)
     generated_images = torch.clamp(generated_images, 0, 1)
@@ -644,6 +719,10 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             gen_batch = generated_images[i:end_idx]
             real_batch = real_images[i:end_idx]
             
+            # Skip empty batches
+            if gen_batch.numel() == 0 or real_batch.numel() == 0:
+                continue
+            
             # SSIM - returns per-image values when size_average=False
             batch_ssim = ssim(real_batch, gen_batch, size_average=False)
             ssim_values.append(batch_ssim.cpu())
@@ -680,6 +759,11 @@ def evaluate_generative_metrics(net, test_loader, device, args):
                 end_idx = min(i + batch_size_metric, num_samples)
                 gen_batch = generated_images[i:end_idx]
                 real_batch = real_images[i:end_idx]
+                
+                # Skip empty batches
+                if gen_batch.numel() == 0 or real_batch.numel() == 0:
+                    continue
+                
                 batch_lpips = lpips(real_batch, gen_batch, device=device)
                 lpips_values.append(batch_lpips)
             lpips_value = np.mean(lpips_values) if lpips_values else float('nan')
@@ -854,7 +938,7 @@ def main(args):
     if args.aggregator is not None:
         agg_name = args.aggregator.lower()
         if agg_name == "upgrad":
-            aggregator = UPGrad()
+            aggregator = UPGrad(norm_eps=args.agg_norm_eps, reg_eps=args.agg_reg_eps)
         elif agg_name == "pcgrad":
             aggregator = PCGrad()
         elif agg_name == "mean":
@@ -864,19 +948,25 @@ def main(args):
         elif agg_name == "imtlg":
             aggregator = IMTLG()
         elif agg_name == "mgda":
-            aggregator = MGDA()
+            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters)
+        elif agg_name == "mgda_l2":
+            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type="l2")
+        elif agg_name == "mgda_loss":
+            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type="loss")
+        elif agg_name == "mgda_loss_plus":
+            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type="loss+")
         elif agg_name == "cagrad":
-            aggregator = CAGrad(c=1.0)
+            aggregator = CAGrad(c=1.0, norm_eps=args.agg_norm_eps)
         elif agg_name == "nashmtl":
-            aggregator = NashMTL(n_tasks=len(net.objectives))
+            aggregator = NashMTL(n_tasks=len(net.objectives), update_weights_every=len(train_loader), optim_niter=20)
         elif agg_name == "dualproj":
-            aggregator = DualProj()
+            aggregator = DualProj(norm_eps=args.agg_norm_eps, reg_eps=args.agg_reg_eps)
         elif agg_name == "jd_sum":
             aggregator = Sum()
         elif agg_name == "nupgrad":
-            aggregator = NUPGrad()
+            aggregator = NUPGrad(norm_eps=args.agg_norm_eps, reg_eps=args.agg_reg_eps)
         elif agg_name == "pnupgrad":
-            aggregator = PNUPGrad()
+            aggregator = PNUPGrad(norm_eps=args.agg_norm_eps, reg_eps=args.agg_reg_eps)
         elif agg_name == "sum":
             aggregator = "sum"
         else:
@@ -1140,6 +1230,38 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--aggregator", "--agg", type=str, default=None)
+    parser.add_argument(
+        "--agg_norm_eps",
+        "--agg-norm-eps",
+        "--norm_eps",
+        "--norm-eps",
+        type=float,
+        default=1e-4,
+        help="Aggregator normalization epsilon (used by UpGrad/DualProj/CAGrad/NUPGrad/PNUPGrad).",
+    )
+    parser.add_argument(
+        "--agg_reg_eps",
+        "--agg-reg-eps",
+        "--reg_eps",
+        "--reg-eps",
+        type=float,
+        default=1e-4,
+        help="Aggregator regularization epsilon (used by UpGrad/DualProj/NUPGrad/PNUPGrad).",
+    )
+    parser.add_argument(
+        "--mgda_epsilon",
+        "--mgda-epsilon",
+        type=float,
+        default=1e-5,
+        help="MGDA Frank-Wolfe stop threshold epsilon (TorchJD default: 1e-5)",
+    )
+    parser.add_argument(
+        "--mgda_max_iters",
+        "--mgda-max-iters",
+        type=int,
+        default=250,
+        help="MGDA Frank-Wolfe maximum iterations (TorchJD default: 250)",
+    )
     parser.add_argument("--arch", type=str, default="vae")
     parser.add_argument("--layer_norm", type=str, default="batch")
     parser.add_argument("--latent_dim", type=int, default=128)

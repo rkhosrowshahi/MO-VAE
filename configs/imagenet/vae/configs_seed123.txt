@@ -1,0 +1,7 @@
+configs/imagenet/vae/mgda/config_seed123.yaml
+configs/imagenet/vae/mgda_l2/config_seed123.yaml
+configs/imagenet/vae/mgda_loss/config_seed123.yaml
+configs/imagenet/vae/mgda_loss_plus/config_seed123.yaml
+configs/imagenet/vae/sum/config_seed123.yaml
+configs/imagenet/vae/upgrad/config_seed123.yaml
+

@@ -32,6 +32,9 @@ def yaml_to_args(config):
     aliases = {
         'agg': 'aggregator',
         'wd': 'weight_decay',
+        # Backward/compat: aggregator epsilons
+        'norm_eps': 'agg_norm_eps',
+        'reg_eps': 'agg_reg_eps',
     }
     
     def get_arg_name(key):

@@ -157,6 +157,9 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
                 features = None
                 if net.features is not None:
                     features = [outputs[feature] for feature in net.features]
+
+                if isinstance(aggregator, MGDA):
+                    aggregator.set_losses(torch.stack(list(loss_dict.values())))
                 
                 if features is not None:
                     mtl_backward(
@@ -945,6 +948,10 @@ def main(args):
             aggregator = Mean()
         elif agg_name == "aligned_mtl":
             aggregator = AlignedMTL()
+        elif agg_name == "aligned_mtl_median":
+            aggregator = AlignedMTL(scale_mode="median")
+        elif agg_name == "aligned_mtl_rmse":
+            aggregator = AlignedMTL(scale_mode="rmse")
         elif agg_name == "imtlg":
             aggregator = IMTLG()
         elif agg_name == "mgda":

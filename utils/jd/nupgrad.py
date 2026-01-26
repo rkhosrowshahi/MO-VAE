@@ -6,10 +6,32 @@ from torch import Tensor
 from torchjd.aggregation._aggregator_bases import GramianWeightedAggregator
 from torchjd.aggregation._mean import MeanWeighting
 from torchjd.aggregation._utils.dual_cone import project_weights
-from torchjd.aggregation._utils.gramian import normalize, regularize
 from torchjd.aggregation._utils.non_differentiable import raise_non_differentiable_error
 from torchjd.aggregation._utils.pref_vector import pref_vector_to_str_suffix, pref_vector_to_weighting
 from torchjd.aggregation._weighting_bases import PSDMatrix, Weighting
+
+
+def normalize(gramian: Tensor, eps: float) -> Tensor:
+    """
+    Normalize the gramian by dividing each element by the product of the L2 norms of the corresponding gradients.
+    
+    If G = J @ J.T, normalizing by L2 norms gives:
+    G_norm[i,j] = G[i,j] / (||J[i]|| * ||J[j]||)
+    where ||J[i]|| = sqrt(G[i,i])
+    """
+    grad_norms = torch.sqrt(torch.diag(gramian).clamp(min=eps))
+    norm_matrix = grad_norms.unsqueeze(1) * grad_norms.unsqueeze(0)
+    return gramian / norm_matrix
+
+
+def regularize(gramian: Tensor, eps: float) -> Tensor:
+    """
+    Regularize the gramian by adding a small value to the diagonal to ensure positive definiteness.
+    
+    This addresses numerical errors that can occur when computing the gramian, which might prevent
+    it from being exactly positive definite.
+    """
+    return gramian + torch.eye(gramian.shape[0], dtype=gramian.dtype, device=gramian.device) * eps
 
 
 class NUPGrad(GramianWeightedAggregator):

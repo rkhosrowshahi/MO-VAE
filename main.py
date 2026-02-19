@@ -40,7 +40,8 @@ from utils.utils import AverageMeter, get_dataset, set_seed
 from utils.metrics import (
     ssim, psnr, lpips,
     calculate_fid, calculate_inception_score, calculate_kid,
-    extract_inception_features, fid_from_features, kid_from_features, precision_recall_from_features,
+    extract_inception_features, fid_from_features, kid_from_features,
+    # precision_recall_from_features,  # Commented out: computationally expensive
 )
 from models import get_network
 
@@ -785,7 +786,7 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     precision = float('nan')
     recall = float('nan')
     if img_size >= min_size_for_imagenet_metrics:
-        tqdm.write("Extracting Inception features (shared for gFID, KID, Precision/Recall)...")
+        tqdm.write("Extracting Inception features (shared for gFID, KID)...")
         try:
             real_features = extract_inception_features(real_images, device=device, batch_size=128)
             tqdm.write(f"Real features shape: {real_features.shape}")
@@ -793,13 +794,13 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             tqdm.write(f"Fake features shape: {fake_features.shape}")
             if len(real_features) > 0 and len(fake_features) > 0:
                 gfid_value = fid_from_features(real_features, fake_features)
-                tqdm.write(f"GFID value: {gfid_value}")
+                tqdm.write(f"gFID value: {gfid_value}")
                 kid_value = kid_from_features(real_features, fake_features)
                 tqdm.write(f"KID value: {kid_value}")
-                precision, recall = precision_recall_from_features(real_features, fake_features, k=5)
-                tqdm.write(f"Precision: {precision}, Recall: {recall}")
+                # precision, recall = precision_recall_from_features(real_features, fake_features, k=3)  # Commented out: expensive
+                # tqdm.write(f"Precision: {precision}, Recall: {recall}")
         except Exception as e:
-            tqdm.write(f"Warning: gFID/KID/Precision/Recall computation failed: {e}")
+            tqdm.write(f"Warning: gFID/KID computation failed: {e}")
     
     # Inception Score (separate pass: needs classifier logits, not features)
     is_mean = float('nan')
@@ -826,7 +827,8 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     
     tqdm.write(
         f"Generative Metrics - gFID: {gfid_value:.4f}, IS: {is_mean:.4f} ± {is_std:.4f}, "
-        f"Precision: {precision:.4f}, Recall: {recall:.4f}, KID: {kid_value:.4f}"
+        f"KID: {kid_value:.4f}"
+        # f"Precision: {precision:.4f}, Recall: {recall:.4f}, "  # Commented out
     )
     
     return metrics
@@ -1196,8 +1198,8 @@ def main(args):
             "final/gfid": gen_metrics['gfid'],
             "final/inception_score_mean": gen_metrics['inception_score_mean'],
             "final/inception_score_std": gen_metrics['inception_score_std'],
-            "final/precision": gen_metrics['precision'],
-            "final/recall": gen_metrics['recall'],
+            # "final/precision": gen_metrics['precision'],   # Commented out
+            # "final/recall": gen_metrics['recall'],         # Commented out
             "final/kid": gen_metrics['kid'],
         }, step=step)
         

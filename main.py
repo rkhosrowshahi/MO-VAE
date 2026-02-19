@@ -26,7 +26,7 @@ from torchjd.aggregation import (
     DualProj,
     Sum
 )
-from utils.jd import NUPGrad, PNUPGrad, AlignedMTL, MGDA
+from utils.jd import NUPGrad, PNUPGrad, AlignedMTL, MGDA, COMFORT
 
 import wandb
 from pymoo.indicators.hv import HV
@@ -37,7 +37,11 @@ import scienceplots
 from torchvision.utils import make_grid
 
 from utils.utils import AverageMeter, get_dataset, set_seed
-from utils.metrics import ssim, ssnr, psnr, lpips, calculate_fid, calculate_inception_score, calculate_precision_recall
+from utils.metrics import (
+    ssim, psnr, lpips,
+    calculate_fid, calculate_inception_score, calculate_kid,
+    extract_inception_features, fid_from_features, kid_from_features, precision_recall_from_features,
+)
 from models import get_network
 
 plt.style.use(["science", "ieee", "no-latex"])
@@ -158,7 +162,7 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
                 if net.features is not None:
                     features = [outputs[feature] for feature in net.features]
 
-                if isinstance(aggregator, MGDA):
+                if isinstance(aggregator, MGDA) or isinstance(aggregator, COMFORT):
                     aggregator.set_losses(torch.stack(list(loss_dict.values())))
                 
                 if features is not None:
@@ -213,37 +217,26 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
 
 def evaluate(net, data_loader, device, args):
     """
-    Evaluate the model on a dataset.
+    Evaluate the model on a dataset (losses and codebook usage only).
     
-    Computes loss metrics and image quality metrics (SSIM, SSNR, PSNR, LPIPS, FID) on the
-    provided dataset. The model is set to evaluation mode and gradients are
-    disabled for efficiency.
+    Computes loss metrics on the provided dataset. Reconstruction metrics
+    (rFID, PSNR, SSIM, LPIPS) are computed by evaluate_recon_metrics().
+    The model is set to evaluation mode and gradients are disabled.
     
     Args:
         net: The neural network model to evaluate
         data_loader: DataLoader for evaluation data
         device: Device to run evaluation on (e.g., 'cuda:0' or 'cpu')
         args: Configuration object containing evaluation settings
-            - max_fid_samples: Maximum number of samples to use for FID computation
             
     Returns:
         dict: Dictionary mapping metric names to AverageMeter objects containing:
             - All loss components (e.g., 'reconstruction_loss', 'kl_loss', 'total_loss')
-            - 'ssim': Structural Similarity Index (higher is better, range 0-1)
-            - 'ssnr': Signal-to-Noise Ratio in dB (higher is better)
-            - 'psnr': Peak Signal-to-Noise Ratio in dB (higher is better)
-            - 'lpips': Learned Perceptual Image Patch Similarity (lower is better, lower bound is 0)
-            - 'fid': Fréchet Inception Distance (lower is better, lower bound is 0)
+            - 'codebook_usage_percentage' (if applicable)
     """
     net.eval()
     loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
     loss_meters["total_loss"] = AverageMeter()
-    
-    # Metrics meters
-    ssim_meter = AverageMeter()
-    ssnr_meter = AverageMeter()
-    psnr_meter = AverageMeter()
-    lpips_meter = AverageMeter()
     
     # Accumulate unique codebook indices across batches for accurate utilization calculation
     all_codebook_indices = None
@@ -251,10 +244,6 @@ def evaluate(net, data_loader, device, args):
     all_codebook_indices_bottom = None  # For VQVAE2
     codebook_size = None
     is_vqvae2 = False
-    
-    # Collect images for FID computation
-    all_real_images = []
-    all_recon_images = []
 
     with torch.no_grad():
         for images, _ in data_loader:
@@ -297,68 +286,6 @@ def evaluate(net, data_loader, device, args):
                         all_codebook_indices_bottom = batch_indices_bottom
                     else:
                         all_codebook_indices_bottom = torch.cat([all_codebook_indices_bottom, batch_indices_bottom], dim=0)
-            
-            # Compute SSIM, SSNR, PSNR, and LPIPS
-            recons = outputs.get("recons")
-            if recons is not None:
-                # Compute SSIM per batch
-                batch_ssim = ssim(images, recons, size_average=True)
-                ssim_meter.update(batch_ssim.item(), n=images.size(0))
-                
-                # Compute SSNR per batch
-                batch_ssnr = ssnr(images, recons)
-                ssnr_meter.update(batch_ssnr, n=images.size(0))
-                
-                # Compute PSNR per batch
-                batch_psnr = psnr(images, recons)
-                psnr_meter.update(batch_psnr, n=images.size(0))
-                
-                # Compute LPIPS per batch (uses VGG16, may fail for very small images)
-                # Skip LPIPS for images < 64x64 to avoid unreliable results
-                img_size = images.size(-1)  # Assuming square images
-                if img_size >= 64:
-                    try:
-                        batch_lpips = lpips(images, recons, device=device)
-                        lpips_meter.update(batch_lpips, n=images.size(0))
-                    except Exception as e:
-                        # Silently skip LPIPS if it fails (e.g., for very small images)
-                        pass
-                
-                # Collect images for FID (limit to avoid memory issues)
-                max_fid_samples = args.max_fid_samples
-                current_samples = sum(img.size(0) for img in all_real_images)
-                if current_samples + images.size(0) <= max_fid_samples:
-                    all_real_images.append(images.cpu())
-                    all_recon_images.append(recons.cpu())
-
-    # Compute FID if we have collected images
-    # Note: FID is a distance/error metric (lower is better), unlike SSIM/SSNR (higher is better)
-    fid_distance = float('nan')
-    if len(all_real_images) > 0:
-        try:
-            all_real = torch.cat(all_real_images, dim=0)
-            all_recon = torch.cat(all_recon_images, dim=0)
-            # Limit to same number of samples for fair comparison
-            min_samples = min(len(all_real), len(all_recon), max_fid_samples)
-            all_real = all_real[:min_samples]
-            all_recon = all_recon[:min_samples]
-            fid_distance = calculate_fid(all_real, all_recon, device=device, batch_size=50)
-        except Exception as e:
-            tqdm.write(f"Warning: FID computation failed: {e}")
-            fid_distance = float('nan')
-    
-    # Add metrics to loss_meters for consistent return format
-    # SSIM: similarity score (higher is better, range 0-1)
-    # SSNR: signal-to-noise ratio in dB (higher is better)
-    # PSNR: peak signal-to-noise ratio in dB (higher is better)
-    # LPIPS: Learned Perceptual Image Patch Similarity (lower is better, lower bound is 0)
-    # FID: Fréchet Inception Distance (lower is better, lower bound is 0)
-    loss_meters["ssim"] = ssim_meter
-    loss_meters["ssnr"] = ssnr_meter
-    loss_meters["psnr"] = psnr_meter
-    loss_meters["lpips"] = lpips_meter
-    loss_meters["fid"] = AverageMeter()
-    loss_meters["fid"].update(fid_distance)
     
     # Calculate final codebook utilization across all batches
     if is_vqvae2 and all_codebook_indices_top is not None and all_codebook_indices_bottom is not None and codebook_size is not None:
@@ -383,6 +310,182 @@ def evaluate(net, data_loader, device, args):
         loss_meters["codebook_usage_percentage"] = codebook_usage_meter
 
     return loss_meters
+
+
+def _compute_recon_metrics_from_tensors(real_t, recon_t, device, batch_size_metric=50, min_size_for_lpips=64):
+    """Compute rFID, PSNR, SSIM, LPIPS from already-collected real and recon tensors."""
+    out = {'rfid': float('nan'), 'psnr': float('nan'), 'ssim': float('nan'), 'lpips': float('nan')}
+    n = min(real_t.size(0), recon_t.size(0))
+    if n == 0:
+        return out
+    real_t = real_t[:n]
+    recon_t = recon_t[:n]
+    ssim_vals, psnr_vals, lpips_vals = [], [], []
+    img_size = real_t.size(-1)
+    for i in range(0, n, batch_size_metric):
+        end = min(i + batch_size_metric, n)
+        r_batch = real_t[i:end].to(device)
+        p_batch = recon_t[i:end].to(device)
+        try:
+            ssim_vals.append(ssim(r_batch, p_batch, size_average=True).item())
+        except Exception:
+            pass
+        try:
+            psnr_vals.append(psnr(r_batch, p_batch))
+        except Exception:
+            pass
+        if img_size >= min_size_for_lpips:
+            try:
+                lpips_vals.append(lpips(r_batch, p_batch, device=device))
+            except Exception:
+                pass
+    if ssim_vals:
+        out['ssim'] = np.mean(ssim_vals)
+    if psnr_vals:
+        out['psnr'] = np.mean(psnr_vals)
+    if lpips_vals:
+        out['lpips'] = np.mean(lpips_vals)
+    if img_size >= min_size_for_lpips and n >= 2:
+        try:
+            out['rfid'] = calculate_fid(real_t, recon_t, device=device, batch_size=50)
+        except Exception as e:
+            tqdm.write(f"Warning: rFID computation failed: {e}")
+    return out
+
+
+def evaluate_with_recon_metrics(net, data_loader, device, args):
+    """
+    Single pass over the data loader: compute test losses and reconstruction metrics.
+    
+    More efficient than calling evaluate() and evaluate_recon_metrics() separately,
+    as the model is run once per batch and (real, recon) are collected in the same loop.
+    
+    Returns:
+        tuple: (loss_meters, recon_metrics) with same types as evaluate() and evaluate_recon_metrics().
+    """
+    net.eval()
+    loss_meters = {key: AverageMeter() for key in net.objectives.keys()}
+    loss_meters["total_loss"] = AverageMeter()
+    max_samples = getattr(args, 'max_fid_samples', 5000)
+    all_real, all_recon = [], []
+    all_codebook_indices = None
+    all_codebook_indices_top = None
+    all_codebook_indices_bottom = None
+    codebook_size = None
+    is_vqvae2 = False
+
+    with torch.no_grad():
+        for images, _ in data_loader:
+            images = images.to(device)
+            outputs = net(images)
+            loss_dict = net.loss_function(images, args=outputs)
+            total_loss = sum(loss_dict.values())
+            loss_meters["total_loss"].update(total_loss.item())
+            for key, value in loss_dict.items():
+                loss_meters[key].update(value.item())
+
+            # Collect real/recon for recon metrics (up to max_samples)
+            recons = outputs.get("recons")
+            if recons is not None:
+                current = sum(x.size(0) for x in all_real)
+                take = min(images.size(0), max(0, max_samples - current))
+                if take > 0:
+                    all_real.append(images[:take].cpu())
+                    all_recon.append(recons[:take].cpu())
+
+            # Codebook indices (same as evaluate())
+            if "encoding_inds" in outputs and outputs["encoding_inds"] is not None:
+                batch_indices = outputs["encoding_inds"].detach().cpu()
+                if all_codebook_indices is None:
+                    all_codebook_indices = batch_indices
+                    if hasattr(net, 'vq_layer') and hasattr(net.vq_layer, 'K'):
+                        codebook_size = net.vq_layer.K
+                else:
+                    all_codebook_indices = torch.cat([all_codebook_indices, batch_indices], dim=0)
+            elif "encoding_inds_top" in outputs and "encoding_inds_bottom" in outputs:
+                is_vqvae2 = True
+                if outputs["encoding_inds_top"] is not None and outputs["encoding_inds_bottom"] is not None:
+                    batch_top = outputs["encoding_inds_top"].detach().cpu()
+                    batch_bottom = outputs["encoding_inds_bottom"].detach().cpu()
+                    if all_codebook_indices_top is None:
+                        all_codebook_indices_top = batch_top
+                        if hasattr(net, 'vq_top') and hasattr(net.vq_top, 'K'):
+                            codebook_size = net.vq_top.K
+                    else:
+                        all_codebook_indices_top = torch.cat([all_codebook_indices_top, batch_top], dim=0)
+                    if all_codebook_indices_bottom is None:
+                        all_codebook_indices_bottom = batch_bottom
+                    else:
+                        all_codebook_indices_bottom = torch.cat([all_codebook_indices_bottom, batch_bottom], dim=0)
+
+    # Codebook usage (same as evaluate())
+    if is_vqvae2 and all_codebook_indices_top is not None and all_codebook_indices_bottom is not None and codebook_size is not None:
+        u_top = torch.unique(all_codebook_indices_top).size(0)
+        u_bottom = torch.unique(all_codebook_indices_bottom).size(0)
+        pct = ((u_top + u_bottom) / (2.0 * codebook_size)) * 100.0
+        m = AverageMeter()
+        m.update(pct)
+        loss_meters["codebook_usage_percentage"] = m
+    elif all_codebook_indices is not None and codebook_size is not None:
+        pct = (torch.unique(all_codebook_indices).size(0) / codebook_size) * 100.0
+        m = AverageMeter()
+        m.update(pct)
+        loss_meters["codebook_usage_percentage"] = m
+
+    # Recon metrics from collected tensors
+    if len(all_real) > 0:
+        real_t = torch.cat(all_real, dim=0)
+        recon_t = torch.cat(all_recon, dim=0)
+        recon_metrics = _compute_recon_metrics_from_tensors(real_t, recon_t, device)
+    else:
+        recon_metrics = {'rfid': float('nan'), 'psnr': float('nan'), 'ssim': float('nan'), 'lpips': float('nan')}
+
+    return loss_meters, recon_metrics
+
+
+def evaluate_recon_metrics(net, data_loader, device, args):
+    """
+    Evaluate reconstruction metrics: rFID, PSNR, SSIM, LPIPS.
+    
+    Runs the model on the data loader to obtain reconstructions, then computes
+    reconstruction quality metrics comparing real vs reconstructed images.
+    
+    Prefer evaluate_with_recon_metrics() when you also need test losses so the
+    model is run only once over the data.
+    
+    Args:
+        net: The neural network model to evaluate
+        data_loader: DataLoader for evaluation data
+        device: Device to run evaluation on
+        args: Configuration with max_fid_samples (max samples for rFID and metrics)
+        
+    Returns:
+        dict: 'rfid', 'psnr', 'ssim', 'lpips' (NaN if insufficient data or failure)
+    """
+    net.eval()
+    max_samples = getattr(args, 'max_fid_samples', 5000)
+    all_real, all_recon = [], []
+
+    with torch.no_grad():
+        for images, _ in data_loader:
+            if sum(x.size(0) for x in all_real) >= max_samples:
+                break
+            images = images.to(device)
+            outputs = net(images)
+            recons = outputs.get("recons")
+            if recons is None:
+                continue
+            take = min(images.size(0), max_samples - sum(x.size(0) for x in all_real))
+            if take <= 0:
+                break
+            all_real.append(images[:take].cpu())
+            all_recon.append(recons[:take].cpu())
+
+    if len(all_real) == 0:
+        return {'rfid': float('nan'), 'psnr': float('nan'), 'ssim': float('nan'), 'lpips': float('nan')}
+    real_t = torch.cat(all_real, dim=0)
+    recon_t = torch.cat(all_recon, dim=0)
+    return _compute_recon_metrics_from_tensors(real_t, recon_t, device)
 
 
 def generate_random_samples(net, num_samples, device, save_path=None, log_to_wandb=False, epoch=None, step=None):
@@ -550,38 +653,26 @@ def build_hv_indicator(objective_keys, args):
 
 def evaluate_generative_metrics(net, test_loader, device, args):
     """
-    Evaluate all generative model metrics on generated samples.
+    Evaluate generative model metrics on generated samples: gFID, IS, Precision/Recall, KID.
     
-    Generates samples from the model and computes comprehensive evaluation metrics:
-    - SSIM, SSNR, PSNR: Pixel-based quality metrics (always computed, comparing generated vs real)
-    - LPIPS: Perceptual similarity using VGG16 (requires images >= 64x64)
-    - FID: Fréchet Inception Distance using InceptionV3 (requires images >= 64x64)
-    - IS: Inception Score using InceptionV3 (requires images >= 64x64)
-    - Precision/Recall: Using InceptionV3 features (requires images >= 64x64)
+    Generates samples from the model and computes:
+    - gFID: Fréchet Inception Distance (real vs generated)
+    - IS: Inception Score
+    - Precision/Recall: Using InceptionV3 features
+    - KID: Kernel Inception Distance
     
-    Note: ImageNet-pretrained metrics (LPIPS, FID, IS, Precision/Recall) are automatically
-    skipped for images smaller than 64x64 to avoid unreliable results from upsampling artifacts.
+    ImageNet-pretrained metrics are skipped for images smaller than 64x64.
     
     Args:
         net: The neural network model (must have a sample() method)
         test_loader: DataLoader for test/real images
         device: Device to run evaluation on (e.g., 'cuda:0' or 'cpu')
-        args: Configuration object containing:
-            - max_gen_metrics_samples: Maximum number of samples to generate/use
+        args: Configuration with max_gen_metrics_samples
             
     Returns:
-        dict: Dictionary containing all computed metrics (NaN for skipped metrics):
-            - 'ssim': Structural Similarity Index (higher is better, range 0-1)
-            - 'ssnr': Signal-to-Noise Ratio in dB (higher is better)
-            - 'psnr': Peak Signal-to-Noise Ratio in dB (higher is better)
-            - 'lpips': Learned Perceptual Image Patch Similarity (lower is better, NaN if skipped)
-            - 'fid': Fréchet Inception Distance (lower is better, NaN if skipped)
-            - 'inception_score_mean': Mean IS across splits (higher is better, NaN if skipped)
-            - 'inception_score_std': Standard deviation of IS (NaN if skipped)
-            - 'precision': Precision score (0-1, higher is better, NaN if skipped)
-            - 'recall': Recall score (0-1, higher is better, NaN if skipped)
+        dict: 'gfid', 'inception_score_mean', 'inception_score_std', 'precision', 'recall', 'kid'
     """
-    tqdm.write("Evaluating all generative metrics (SSIM, SSNR, PSNR, LPIPS, FID, IS, Precision, Recall)...")
+    tqdm.write("Evaluating generative metrics (gFID, IS, Precision, Recall, KID)...")
     
     num_samples = args.max_gen_metrics_samples
     
@@ -589,10 +680,8 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     if num_samples <= 0:
         tqdm.write(f"Warning: max_gen_metrics_samples is {num_samples}, skipping generative metrics evaluation.")
         return {
-            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
-            'lpips': float('nan'), 'fid': float('nan'),
-            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
-            'precision': float('nan'), 'recall': float('nan')
+            'gfid': float('nan'), 'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan'), 'kid': float('nan')
         }
     
     # Generate samples from the model
@@ -618,10 +707,8 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     if len(generated_samples) == 0:
         tqdm.write("Error: No samples were generated. Cannot compute generative metrics.")
         return {
-            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
-            'lpips': float('nan'), 'fid': float('nan'),
-            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
-            'precision': float('nan'), 'recall': float('nan')
+            'gfid': float('nan'), 'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan'), 'kid': float('nan')
         }
     
     generated_images = torch.cat(generated_samples, dim=0)[:num_samples]
@@ -630,10 +717,8 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     if generated_images.numel() == 0:
         tqdm.write("Error: Generated images tensor is empty. Cannot compute generative metrics.")
         return {
-            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
-            'lpips': float('nan'), 'fid': float('nan'),
-            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
-            'precision': float('nan'), 'recall': float('nan')
+            'gfid': float('nan'), 'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan'), 'kid': float('nan')
         }
     
     # Collect real images from test dataset
@@ -654,10 +739,8 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     if len(real_images) == 0:
         tqdm.write("Error: No real images were collected from test dataset. Cannot compute generative metrics.")
         return {
-            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
-            'lpips': float('nan'), 'fid': float('nan'),
-            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
-            'precision': float('nan'), 'recall': float('nan')
+            'gfid': float('nan'), 'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan'), 'kid': float('nan')
         }
     
     real_images = torch.cat(real_images, dim=0)[:num_samples]
@@ -666,23 +749,18 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     if real_images.numel() == 0:
         tqdm.write("Error: Real images tensor is empty. Cannot compute generative metrics.")
         return {
-            'ssim': float('nan'), 'ssnr': float('nan'), 'psnr': float('nan'),
-            'lpips': float('nan'), 'fid': float('nan'),
-            'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
-            'precision': float('nan'), 'recall': float('nan')
+            'gfid': float('nan'), 'inception_score_mean': float('nan'), 'inception_score_std': float('nan'),
+            'precision': float('nan'), 'recall': float('nan'), 'kid': float('nan')
         }
     
     # Ensure both tensors have the same number of samples
-    min_samples = min(generated_images.size(0), real_images.size(0))
-    if min_samples < num_samples:
-        tqdm.write(f"Warning: Only {min_samples} samples available (requested {num_samples}). Using {min_samples} samples for metrics.")
-        generated_images = generated_images[:min_samples]
-        real_images = real_images[:min_samples]
-    
-    # Ensure both are in [0, 1] range (metrics functions handle normalization, but let's be safe)
-    generated_images = torch.clamp(generated_images, 0, 1)
-    real_images = torch.clamp(real_images, 0, 1)
-    
+    n = min(generated_images.size(0), real_images.size(0))
+    if n < num_samples:
+        tqdm.write(f"Warning: Only {n} samples available (requested {num_samples}). Using {n} samples for metrics.")
+    generated_images = generated_images[:n]
+    real_images = real_images[:n]
+    # n is the actual count used for all metric loops below (do not clamp: metrics expect [0,1] or [-1,1] per pipeline and handle internally)
+
     # Move to device for computation
     generated_images = generated_images.to(device)
     real_images = real_images.to(device)
@@ -695,151 +773,55 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     
     if img_size < min_size_for_imagenet_metrics:
         tqdm.write(f"Warning: Image size ({img_size}x{img_size}) is too small for ImageNet-pretrained metrics.")
-        tqdm.write(f"Skipping FID, IS, LPIPS, Precision/Recall (require >= {min_size_for_imagenet_metrics}x{min_size_for_imagenet_metrics}).")
-        tqdm.write(f"Computing only pixel-based metrics: SSIM, SSNR, PSNR")
+        tqdm.write(f"Skipping gFID, IS, Precision/Recall, KID (require >= {min_size_for_imagenet_metrics}x{min_size_for_imagenet_metrics}).")
     elif img_size < 128:
         tqdm.write(f"Note: Image size ({img_size}x{img_size}) is smaller than typical ImageNet size (224x224 or 299x299).")
-        tqdm.write(f"ImageNet-pretrained metrics will upsample images, which may affect reliability.")
     elif img_size >= 256:
-        tqdm.write(f"Image size ({img_size}x{img_size}) is suitable for all metrics (including ImageNet-pretrained).")
+        tqdm.write(f"Image size ({img_size}x{img_size}) is suitable for all generative metrics.")
     
-    # Compute SSIM, SSNR, PSNR (always computed - pixel-based metrics)
-    tqdm.write("Computing SSIM, SSNR, PSNR...")
-    ssim_value = float('nan')
-    ssnr_value = float('nan')
-    psnr_value = float('nan')
-    
-    try:
-        # Compute metrics by comparing corresponding generated and real images
-        # Process in batches to avoid memory issues
-        batch_size_metric = 50
-        ssim_values = []
-        ssnr_values = []
-        psnr_values = []
-        
-        for i in range(0, num_samples, batch_size_metric):
-            end_idx = min(i + batch_size_metric, num_samples)
-            gen_batch = generated_images[i:end_idx]
-            real_batch = real_images[i:end_idx]
-            
-            # Skip empty batches
-            if gen_batch.numel() == 0 or real_batch.numel() == 0:
-                continue
-            
-            # SSIM - returns per-image values when size_average=False
-            batch_ssim = ssim(real_batch, gen_batch, size_average=False)
-            ssim_values.append(batch_ssim.cpu())
-            
-            # SSNR - returns single float per batch
-            batch_ssnr = ssnr(real_batch, gen_batch)
-            ssnr_values.append(batch_ssnr)
-            
-            # PSNR - returns single float per batch
-            batch_psnr = psnr(real_batch, gen_batch)
-            psnr_values.append(batch_psnr)
-        
-        # Average SSIM (it returns per-image values)
-        if len(ssim_values) > 0:
-            ssim_value = torch.cat(ssim_values).mean().item()
-        else:
-            ssim_value = float('nan')
-        
-        # Average other metrics (they return batch averages)
-        ssnr_value = np.mean(ssnr_values) if ssnr_values else float('nan')
-        psnr_value = np.mean(psnr_values) if psnr_values else float('nan')
-        
-    except Exception as e:
-        tqdm.write(f"Warning: SSIM/SSNR/PSNR computation failed: {e}")
-    
-    # Compute LPIPS (uses VGG16, requires >= 64x64 for reliability)
-    lpips_value = float('nan')
+    # Extract Inception features once and reuse for gFID, KID, Precision/Recall
+    gfid_value = float('nan')
+    kid_value = float('nan')
+    precision = float('nan')
+    recall = float('nan')
     if img_size >= min_size_for_imagenet_metrics:
-        tqdm.write("Computing LPIPS...")
+        tqdm.write("Extracting Inception features (shared for gFID, KID, Precision/Recall)...")
         try:
-            batch_size_metric = 50
-            lpips_values = []
-            for i in range(0, num_samples, batch_size_metric):
-                end_idx = min(i + batch_size_metric, num_samples)
-                gen_batch = generated_images[i:end_idx]
-                real_batch = real_images[i:end_idx]
-                
-                # Skip empty batches
-                if gen_batch.numel() == 0 or real_batch.numel() == 0:
-                    continue
-                
-                batch_lpips = lpips(real_batch, gen_batch, device=device)
-                lpips_values.append(batch_lpips)
-            lpips_value = np.mean(lpips_values) if lpips_values else float('nan')
+            real_features = extract_inception_features(real_images.cpu(), device=device, batch_size=50)
+            fake_features = extract_inception_features(generated_images.cpu(), device=device, batch_size=50)
+            if len(real_features) > 0 and len(fake_features) > 0:
+                gfid_value = fid_from_features(real_features, fake_features)
+                kid_value = kid_from_features(real_features, fake_features)
+                precision, recall = precision_recall_from_features(real_features, fake_features, k=5)
         except Exception as e:
-            tqdm.write(f"Warning: LPIPS computation failed: {e}")
-    else:
-        tqdm.write("Skipping LPIPS: Image size too small for reliable VGG16 features.")
+            tqdm.write(f"Warning: gFID/KID/Precision/Recall computation failed: {e}")
     
-    # Compute FID (uses InceptionV3, requires >= 64x64 for reliability)
-    fid_value = float('nan')
-    if img_size >= min_size_for_imagenet_metrics:
-        tqdm.write("Computing FID...")
-        try:
-            fid_value = calculate_fid(
-                real_images.cpu(), 
-                generated_images.cpu(), 
-                device=device, 
-                batch_size=50
-            )
-        except Exception as e:
-            tqdm.write(f"Warning: FID computation failed: {e}")
-    else:
-        tqdm.write("Skipping FID: Image size too small for reliable InceptionV3 features.")
-    
-    # Compute Inception Score (uses InceptionV3, requires >= 64x64 for reliability)
+    # Inception Score (separate pass: needs classifier logits, not features)
     is_mean = float('nan')
     is_std = float('nan')
     if img_size >= min_size_for_imagenet_metrics:
         tqdm.write("Computing Inception Score...")
         try:
             is_mean, is_std = calculate_inception_score(
-                generated_images.cpu(), 
-                device=device, 
+                generated_images.cpu(),
+                device=device,
                 batch_size=50
             )
         except Exception as e:
             tqdm.write(f"Warning: Inception Score computation failed: {e}")
-    else:
-        tqdm.write("Skipping IS: Image size too small for reliable InceptionV3 predictions.")
-    
-    # Compute Precision and Recall (uses InceptionV3, requires >= 64x64 for reliability)
-    precision = float('nan')
-    recall = float('nan')
-    if img_size >= min_size_for_imagenet_metrics:
-        tqdm.write("Computing Precision and Recall...")
-        try:
-            precision, recall = calculate_precision_recall(
-                real_images.cpu(), 
-                generated_images.cpu(), 
-                device=device, 
-                batch_size=50
-            )
-        except Exception as e:
-            tqdm.write(f"Warning: Precision/Recall computation failed: {e}")
-    else:
-        tqdm.write("Skipping Precision/Recall: Image size too small for reliable InceptionV3 features.")
     
     metrics = {
-        'ssim': ssim_value,
-        'ssnr': ssnr_value,
-        'psnr': psnr_value,
-        'lpips': lpips_value,
-        'fid': fid_value,
+        'gfid': gfid_value,
         'inception_score_mean': is_mean,
         'inception_score_std': is_std,
         'precision': precision,
         'recall': recall,
+        'kid': kid_value,
     }
     
     tqdm.write(
-        f"Generative Metrics - SSIM: {ssim_value:.4f}, SSNR: {ssnr_value:.4f} dB, "
-        f"PSNR: {psnr_value:.4f} dB, LPIPS: {lpips_value:.4f}, FID: {fid_value:.4f}, "
-        f"IS: {is_mean:.4f} ± {is_std:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}"
+        f"Generative Metrics - gFID: {gfid_value:.4f}, IS: {is_mean:.4f} ± {is_std:.4f}, "
+        f"Precision: {precision:.4f}, Recall: {recall:.4f}, KID: {kid_value:.4f}"
     )
     
     return metrics
@@ -934,6 +916,8 @@ def main(args):
             scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.scheduler_lr_min)
         elif args.scheduler == "multi_step":
             scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.scheduler_milestones, gamma=args.scheduler_gamma)
+        elif args.scheduler == "exponential":
+            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.scheduler_gamma)
         else:
             raise ValueError(f"Scheduler {args.scheduler} not supported")
 
@@ -954,14 +938,14 @@ def main(args):
             aggregator = AlignedMTL(scale_mode="rmse")
         elif agg_name == "imtlg":
             aggregator = IMTLG()
-        elif agg_name == "mgda":
+        elif agg_name == 'mgda':
             aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters)
-        elif agg_name == "mgda_l2":
-            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type="l2")
-        elif agg_name == "mgda_loss":
-            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type="loss")
-        elif agg_name == "mgda_loss_plus":
-            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type="loss+")
+        elif agg_name == 'mgda_ln':
+            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type='l2')
+        elif agg_name == 'mgda_gn':
+            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type='loss')
+        elif agg_name == 'mgda_lgn':
+            aggregator = MGDA(epsilon=args.mgda_epsilon, max_iters=args.mgda_max_iters, norm_type='loss+')
         elif agg_name == "cagrad":
             aggregator = CAGrad(c=1.0, norm_eps=args.agg_norm_eps)
         elif agg_name == "nashmtl":
@@ -976,6 +960,18 @@ def main(args):
             aggregator = PNUPGrad(norm_eps=args.agg_norm_eps, reg_eps=args.agg_reg_eps)
         elif agg_name == "sum":
             aggregator = "sum"
+        elif agg_name == "comfort":
+            aggregator = COMFORT(
+                mgda_norm_type=getattr(args, "comfort_mgda_norm_type", "none"),
+                mgda_stable=getattr(args, "comfort_mgda_stable", False),
+                mgda_epsilon=args.mgda_epsilon,
+                mgda_max_iters=args.mgda_max_iters,
+                mgda_min_eigenvalue_eps=getattr(args, "mgda_min_eigenvalue_eps", 1e-10),
+                beta_k=getattr(args, "comfort_beta_k", 1.0),
+                beta_a=getattr(args, "comfort_beta_a", 1.0),
+                beta_l=getattr(args, "comfort_beta_l", 0.01),
+                beta_u=getattr(args, "comfort_beta_u", 1.0),
+            )
         else:
             raise ValueError(f"Aggregator {args.aggregator} not supported")
     else:
@@ -1023,6 +1019,8 @@ def main(args):
     
     step = 0
     for epoch in tqdm(range(1, args.epochs + 1)):
+        if isinstance(aggregator, COMFORT):
+            aggregator.set_epoch(epoch, args.epochs)
         train_loss_meters, step = train_epoch(
             net,
             train_loader=train_loader,
@@ -1102,21 +1100,10 @@ def main(args):
         if epoch % args.eval_freq == 0 or epoch in {1, args.epochs}:
             eval_loss_meters = evaluate(net, test_loader, device=device, args=args)
 
-            # Update log_dict with all eval metrics (losses and image quality metrics)
+            # Update log_dict with all eval metrics (losses, codebook_usage)
             log_dict.update({f"eval/{key}": meter.avg for key, meter in eval_loss_meters.items()})
-            
-            # Explicitly add image quality metrics to wandb log dict
-            if "ssim" in eval_loss_meters:
-                log_dict["eval/ssim"] = eval_loss_meters["ssim"].avg
-            if "ssnr" in eval_loss_meters:
-                log_dict["eval/ssnr"] = eval_loss_meters["ssnr"].avg
-            if "psnr" in eval_loss_meters:
-                log_dict["eval/psnr"] = eval_loss_meters["psnr"].avg
-            if "lpips" in eval_loss_meters:
-                log_dict["eval/lpips"] = eval_loss_meters["lpips"].avg
-            if "fid" in eval_loss_meters:
-                log_dict["eval/fid"] = eval_loss_meters["fid"].avg
 
+            eval_hv = None
             if hv_indicator is not None:
                 eval_point = np.array([[eval_loss_meters[key].avg for key in objective_keys]])
                 eval_hv = hv_indicator(eval_point)
@@ -1125,20 +1112,14 @@ def main(args):
             # Format metrics for display
             metric_strs = []
             for key, meter in eval_loss_meters.items():
-                if key in ["ssim", "ssnr", "psnr", "lpips", "fid"]:
-                    if key == "fid" and np.isnan(meter.avg):
-                        metric_strs.append(f"{key}: N/A")
-                    else:
-                        metric_strs.append(f"{key}: {meter.avg:.4f}")
-                elif key == "codebook_usage_percentage":
+                if key == "codebook_usage_percentage":
                     metric_strs.append(f"{key}: {meter.avg:.2f}%")
                 else:
                     metric_strs.append(f"{key}: {meter.avg:.6e}")
-            
+            if eval_hv is not None:
+                metric_strs.append(f"HV: {eval_hv:.2e}")
             tqdm.write(
-                f" Epoch {epoch}/{args.epochs} - Eval - "
-                + ", ".join(metric_strs)
-                + f", HV: {eval_hv:.2e}"
+                f" Epoch {epoch}/{args.epochs} - Eval - " + ", ".join(metric_strs)
             )
 
         if args.use_wandb:
@@ -1189,21 +1170,30 @@ def main(args):
     tqdm.write(f"Final checkpoint (last epoch) saved to: {final_ckpt}")
     tqdm.write(f"Best checkpoint (eval loss: {best_eval_loss:.6e}) saved to: {os.path.join(save_root, 'checkpoints', 'best_checkpoint.pth')}")
 
-    # Evaluate all generative metrics (SSIM, SSNR, PSNR, LPIPS, FID, IS, Precision, Recall)
+    # Evaluate reconstruction metrics (rFID, PSNR, SSIM, LPIPS) and generative metrics (gFID, IS, Precision, Recall, KID)
+    loss_meters, recon_metrics = evaluate_with_recon_metrics(net, test_loader, device, args)
     gen_metrics = evaluate_generative_metrics(net, test_loader, device, args)
     
     if args.use_wandb:
-        # Log all generative metrics to wandb
+        # Log final loss values
+        final_losses = {f"final/eval_{key}": meter.avg for key, meter in loss_meters.items() if hasattr(meter, 'avg')}
+        if final_losses:
+            wandb.log(final_losses, step=step)
+        # Log reconstruction metrics
         wandb.log({
-            "final/ssim": gen_metrics['ssim'],
-            "final/ssnr": gen_metrics['ssnr'],
-            "final/psnr": gen_metrics['psnr'],
-            "final/lpips": gen_metrics['lpips'],
-            "final/fid": gen_metrics['fid'],
+            "final/rfid": recon_metrics['rfid'],
+            "final/psnr": recon_metrics['psnr'],
+            "final/ssim": recon_metrics['ssim'],
+            "final/lpips": recon_metrics['lpips'],
+        }, step=step)
+        # Log generative metrics
+        wandb.log({
+            "final/gfid": gen_metrics['gfid'],
             "final/inception_score_mean": gen_metrics['inception_score_mean'],
             "final/inception_score_std": gen_metrics['inception_score_std'],
             "final/precision": gen_metrics['precision'],
             "final/recall": gen_metrics['recall'],
+            "final/kid": gen_metrics['kid'],
         }, step=step)
         
         try:
@@ -1269,6 +1259,31 @@ if __name__ == "__main__":
         default=250,
         help="MGDA Frank-Wolfe maximum iterations (TorchJD default: 250)",
     )
+    parser.add_argument(
+        "--mgda_min_eigenvalue_eps",
+        "--mgda-min-eigenvalue-eps",
+        type=float,
+        default=1e-10,
+        help="COMFORT/StableMGDA: min eigenvalue clamp (default 1e-10)",
+    )
+    parser.add_argument(
+        "--comfort_mgda_norm_type",
+        "--comfort-mgda-norm-type",
+        type=str,
+        default="none",
+        choices=["none", "l2", "loss", "loss+"],
+        help="COMFORT: MGDA branch norm type (default: none)",
+    )
+    parser.add_argument(
+        "--comfort_mgda_stable",
+        "--comfort-mgda-stable",
+        action="store_true",
+        help="COMFORT: use StableMGDA (eigen regularization)",
+    )
+    parser.add_argument("--comfort_beta_k", type=float, default=1.0, help="COMFORT: beta schedule steepness")
+    parser.add_argument("--comfort_beta_a", type=float, default=1.0, help="COMFORT: beta schedule progress power")
+    parser.add_argument("--comfort_beta_l", type=float, default=0.01, help="COMFORT: beta at start of training")
+    parser.add_argument("--comfort_beta_u", type=float, default=1.0, help="COMFORT: beta at end of training")
     parser.add_argument("--arch", type=str, default="vae")
     parser.add_argument("--layer_norm", type=str, default="batch")
     parser.add_argument("--latent_dim", type=int, default=128)
@@ -1299,8 +1314,8 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument("--wandb_group", type=str, default=None)
     parser.add_argument("--wandb_tags", type=str, nargs="+", default=None)
-    parser.add_argument("--max_fid_samples", type=int, default=5000, help="Maximum number of samples to use for FID computation")
-    parser.add_argument("--max_gen_metrics_samples", type=int, default=5000, help="Maximum number of samples to use for IS, Precision, and Recall computation")
+    parser.add_argument("--max_fid_samples", type=int, default=10000, help="Maximum number of samples to use for FID computation")
+    parser.add_argument("--max_gen_metrics_samples", type=int, default=10000, help="Maximum number of samples to use for IS, Precision, and Recall computation")
 
     args = parser.parse_args()
     if args.seed is not None:

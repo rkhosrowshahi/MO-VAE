@@ -1,6 +1,6 @@
 configs/celeba-hq/vae/mgda/config_seed999.yaml
-configs/celeba-hq/vae/mgda_l2/config_seed999.yaml
-configs/celeba-hq/vae/mgda_loss/config_seed999.yaml
-configs/celeba-hq/vae/mgda_loss_plus/config_seed999.yaml
+configs/celeba-hq/vae/mgda_ln/config_seed999.yaml
+configs/celeba-hq/vae/mgda_gn/config_seed999.yaml
+configs/celeba-hq/vae/mgda_lgn/config_seed999.yaml
 configs/celeba-hq/vae/sum/config_seed999.yaml
 configs/celeba-hq/vae/upgrad/config_seed999.yaml

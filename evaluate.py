@@ -14,7 +14,7 @@ except ImportError:
 
 from utils.utils import get_dataset, set_seed
 from models import get_network
-from main import evaluate as evaluate_model, evaluate_generative_metrics
+from main import evaluate_with_recon_metrics, evaluate_generative_metrics
 
 
 def load_model_from_checkpoint(model_path, dataset, arch, device):
@@ -115,7 +115,7 @@ def format_value(value, metric_name):
         return f"{value:.4f}"
     elif metric_name in ['ssnr', 'psnr']:
         return f"{value:.2f} dB"
-    elif metric_name in ['lpips', 'fid', 'inception_score_mean', 'inception_score_std']:
+    elif metric_name in ['lpips', 'fid', 'rfid', 'gfid', 'kid', 'inception_score_mean', 'inception_score_std']:
         return f"{value:.4f}"
     elif metric_name == 'hv' or metric_name == 'hypervolume':
         return f"{value:.6e}"
@@ -129,13 +129,14 @@ def format_value(value, metric_name):
             return f"{value:.6f}"
 
 
-def print_results_table(loss_meters, gen_metrics, hv_value=None):
+def print_results_table(loss_meters, recon_metrics, gen_metrics, hv_value=None):
     """
     Print evaluation results in a formatted table.
     
     Args:
         loss_meters: Dictionary of AverageMeter objects from evaluate()
-        gen_metrics: Dictionary of metric values from evaluate_generative_metrics()
+        recon_metrics: Dictionary from evaluate_recon_metrics() (rFID, PSNR, SSIM, LPIPS)
+        gen_metrics: Dictionary from evaluate_generative_metrics() (gFID, IS, Precision, Recall, KID)
         hv_value: Hypervolume value (optional)
     """
     # Add loss metrics (training objectives)
@@ -145,9 +146,8 @@ def print_results_table(loss_meters, gen_metrics, hv_value=None):
     
     loss_data = []
     for key, meter in loss_meters.items():
-        if key not in ['ssim', 'ssnr', 'psnr', 'lpips', 'fid']:  # Exclude image quality metrics from loss section
-            value = meter.avg if hasattr(meter, 'avg') else meter
-            loss_data.append([key, format_value(value, key)])
+        value = meter.avg if hasattr(meter, 'avg') else meter
+        loss_data.append([key, format_value(value, key)])
     
     # Add HV if available
     if hv_value is not None:
@@ -164,41 +164,45 @@ def print_results_table(loss_meters, gen_metrics, hv_value=None):
             for name, value in loss_data:
                 print(f"{name:<{max_name_len+5}} {value:>20}")
     
-    # Add generative metrics
+    # Reconstruction metrics (rFID, PSNR, SSIM, LPIPS)
+    print("\n" + "="*80)
+    print("RECONSTRUCTION METRICS")
+    print("="*80)
+    recon_data = [
+        ["rFID", format_value(recon_metrics.get('rfid', float('nan')), 'rfid')],
+        ["PSNR", format_value(recon_metrics.get('psnr', float('nan')), 'psnr')],
+        ["SSIM", format_value(recon_metrics.get('ssim', float('nan')), 'ssim')],
+        ["LPIPS", format_value(recon_metrics.get('lpips', float('nan')), 'lpips')],
+    ]
+    if HAS_TABULATE:
+        print(tabulate(recon_data, headers=["Metric", "Value"], tablefmt="grid"))
+    else:
+        max_name_len = max(len(name) for name, _ in recon_data)
+        print(f"{'Metric':<{max_name_len+5}} {'Value':>20}")
+        print("-" * (max_name_len + 26))
+        for name, value in recon_data:
+            print(f"{name:<{max_name_len+5}} {value:>20}")
+    
+    # Generative metrics (gFID, IS, Precision, Recall, KID)
     print("\n" + "="*80)
     print("GENERATIVE METRICS")
     print("="*80)
-    
-    gen_data = []
-    
-    # Add image quality metrics from loss_meters (if available)
-    for key in ['ssim', 'ssnr', 'psnr', 'lpips', 'fid']:
-        if key in loss_meters:
-            value = loss_meters[key].avg if hasattr(loss_meters[key], 'avg') else loss_meters[key]
-            gen_data.append([key.upper(), format_value(value, key)])
-    
-    # Add generative metrics from evaluate_generative_metrics
-    if gen_metrics:
-        gen_data.append(["SSIM (gen)", format_value(gen_metrics.get('ssim', float('nan')), 'ssim')])
-        gen_data.append(["SSNR (gen)", format_value(gen_metrics.get('ssnr', float('nan')), 'ssnr')])
-        gen_data.append(["PSNR (gen)", format_value(gen_metrics.get('psnr', float('nan')), 'psnr')])
-        gen_data.append(["LPIPS (gen)", format_value(gen_metrics.get('lpips', float('nan')), 'lpips')])
-        gen_data.append(["FID (gen)", format_value(gen_metrics.get('fid', float('nan')), 'fid')])
-        gen_data.append(["IS Mean (gen)", format_value(gen_metrics.get('inception_score_mean', float('nan')), 'inception_score_mean')])
-        gen_data.append(["IS Std (gen)", format_value(gen_metrics.get('inception_score_std', float('nan')), 'inception_score_std')])
-        gen_data.append(["Precision (gen)", format_value(gen_metrics.get('precision', float('nan')), 'precision')])
-        gen_data.append(["Recall (gen)", format_value(gen_metrics.get('recall', float('nan')), 'recall')])
-    
-    # Print generative metrics table
-    if gen_data:
-        if HAS_TABULATE:
-            print(tabulate(gen_data, headers=["Metric", "Value"], tablefmt="grid"))
-        else:
-            max_name_len = max(len(name) for name, _ in gen_data)
-            print(f"{'Metric':<{max_name_len+5}} {'Value':>20}")
-            print("-" * (max_name_len + 26))
-            for name, value in gen_data:
-                print(f"{name:<{max_name_len+5}} {value:>20}")
+    gen_data = [
+        ["gFID", format_value(gen_metrics.get('gfid', float('nan')), 'gfid')],
+        ["IS Mean", format_value(gen_metrics.get('inception_score_mean', float('nan')), 'inception_score_mean')],
+        ["IS Std", format_value(gen_metrics.get('inception_score_std', float('nan')), 'inception_score_std')],
+        ["Precision", format_value(gen_metrics.get('precision', float('nan')), 'precision')],
+        ["Recall", format_value(gen_metrics.get('recall', float('nan')), 'recall')],
+        ["KID", format_value(gen_metrics.get('kid', float('nan')), 'kid')],
+    ]
+    if HAS_TABULATE:
+        print(tabulate(gen_data, headers=["Metric", "Value"], tablefmt="grid"))
+    else:
+        max_name_len = max(len(name) for name, _ in gen_data)
+        print(f"{'Metric':<{max_name_len+5}} {'Value':>20}")
+        print("-" * (max_name_len + 26))
+        for name, value in gen_data:
+            print(f"{name:<{max_name_len+5}} {value:>20}")
     
     print("="*80 + "\n")
 
@@ -224,7 +228,8 @@ def evaluate(arch, dataset, model_path, device=None, batch_size=128, num_workers
         dict: Dictionary containing all evaluation results:
             - 'test_losses': Dictionary of test loss values (training objectives)
             - 'hv': Hypervolume value (or None if < 2 objectives)
-            - 'generative_metrics': Dictionary of generative metrics (SSIM, FID, IS, etc.)
+            - 'recon_metrics': rFID, PSNR, SSIM, LPIPS
+            - 'generative_metrics': gFID, IS, Precision, Recall, KID
     """
     if device is None:
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -280,25 +285,23 @@ def evaluate(arch, dataset, model_path, device=None, batch_size=128, num_workers
     
     eval_args = EvalArgs()
     
-    # Evaluate test losses (training objectives)
+    # Single pass: test losses + reconstruction metrics (rFID, PSNR, SSIM, LPIPS)
     if verbose:
         print("\n" + "="*80)
-        print("Evaluating test losses (training objectives)...")
+        print("Evaluating test losses and reconstruction metrics (single pass)...")
         print("="*80)
-    loss_meters = evaluate_model(net, test_loader, device=device, args=eval_args)
+    loss_meters, recon_metrics = evaluate_with_recon_metrics(net, test_loader, device=device, args=eval_args)
     
-    # Convert loss_meters to dictionary of values
+    # Convert loss_meters to dictionary of values (losses and codebook_usage only)
     test_losses = {}
     for key, meter in loss_meters.items():
-        if key not in ['ssim', 'ssnr', 'psnr', 'lpips', 'fid']:  # Exclude image quality metrics
-            test_losses[key] = meter.avg if hasattr(meter, 'avg') else meter
+        test_losses[key] = meter.avg if hasattr(meter, 'avg') else meter
     
     # Calculate Hypervolume (HV) for test losses
     objective_keys = list(net.objectives.keys())
     hv_indicator = build_hv_indicator(objective_keys)
     hv_value = None
     if hv_indicator is not None:
-        # Extract objective values from loss_meters
         eval_point = np.array([[loss_meters[key].avg for key in objective_keys]])
         hv_value = hv_indicator(eval_point)
         if verbose:
@@ -307,7 +310,7 @@ def evaluate(arch, dataset, model_path, device=None, batch_size=128, num_workers
         if verbose:
             print(f"Hypervolume (HV): N/A (requires at least 2 objectives, found {len(objective_keys)})")
     
-    # Evaluate generative metrics
+    # Evaluate generative metrics (gFID, IS, Precision, Recall, KID)
     if verbose:
         print("\n" + "="*80)
         print("Evaluating generative metrics...")
@@ -316,13 +319,14 @@ def evaluate(arch, dataset, model_path, device=None, batch_size=128, num_workers
     
     # Print results in table format if verbose
     if verbose:
-        print_results_table(loss_meters, gen_metrics, hv_value=hv_value)
+        print_results_table(loss_meters, recon_metrics, gen_metrics, hv_value=hv_value)
         print("Evaluation completed!")
     
     # Return results as dictionary
     results = {
         'test_losses': test_losses,
         'hv': hv_value,
+        'recon_metrics': recon_metrics,
         'generative_metrics': gen_metrics,
         'arch': arch,
         'dataset': dataset,

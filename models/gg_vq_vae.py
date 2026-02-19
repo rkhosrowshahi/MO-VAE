@@ -56,9 +56,10 @@ class GGVQVAE(VQVAE):
         sobel_y = torch.tensor([[-1., -2., -1.],
                                 [ 0.,  0.,  0.],
                                 [ 1.,  2.,  1.]]).unsqueeze(0).unsqueeze(0) #(1,1,3,3)
-        # Ensuring sobel filters can apply to RGB images - register as buffers so they move with model
-        self.register_buffer('sobel_x', sobel_x.expand(3, 1, 3, 3))
-        self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3))
+        # Ensuring sobel filters can apply to RGB images - register as buffers so they move with model.
+        # .clone() required: expand() returns a view sharing memory, which breaks state_dict load.
+        self.register_buffer('sobel_x', sobel_x.expand(3, 1, 3, 3).clone())
+        self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3).clone())
 
         # Update objectives dictionary to include gradient-guided and edge matching losses
         self.objectives = {"reconstruction_loss": self.recon_obj, "embedding_loss": None, "commitment_loss": None}

@@ -494,7 +494,7 @@ class InceptionV3ForIS(nn.Module):
         return x
 
 
-def calculate_fid(real_images, fake_images, device='cuda', batch_size=50, eps=1e-6):
+def calculate_fid(real_images, fake_images, device='cuda', batch_size=128, eps=1e-6):
     """
     Calculate Fréchet Inception Distance (FID) between real and fake images.
     
@@ -598,7 +598,7 @@ def calculate_fid(real_images, fake_images, device='cuda', batch_size=50, eps=1e
     return float(fid)
 
 
-def extract_inception_features(images, device='cuda', batch_size=50):
+def extract_inception_features(images, device='cuda', batch_size=128):
     """
     Extract InceptionV3 features once for reuse by FID, KID, and Precision/Recall.
     
@@ -718,7 +718,7 @@ def precision_recall_from_features(real_features, fake_features, k=3):
     return float(np.mean(precision_scores)), float(np.mean(recall_scores))
 
 
-def calculate_kid(real_images, fake_images, device='cuda', batch_size=50, subset_size=50, n_subsets=50, degree=3, gamma=None):
+def calculate_kid(real_images, fake_images, device='cuda', batch_size=128, subset_size=50, n_subsets=50, degree=3, gamma=None):
     """
     Calculate Kernel Inception Distance (KID) between real and fake images.
     
@@ -814,7 +814,7 @@ def calculate_kid(real_images, fake_images, device='cuda', batch_size=50, subset
     return float(np.mean(kid_values))
 
 
-def calculate_inception_score(images, device='cuda', batch_size=50, splits=10):
+def calculate_inception_score(images, device='cuda', batch_size=128, splits=10):
     """
     Calculate Inception Score (IS) for generated images.
     
@@ -896,7 +896,7 @@ def calculate_inception_score(images, device='cuda', batch_size=50, splits=10):
     return np.mean(scores), np.std(scores)
 
 
-def calculate_precision_recall(real_images, fake_images, device='cuda', batch_size=50, k=5):
+def calculate_precision_recall(real_images, fake_images, device='cuda', batch_size=128, k=5):
     """
     Calculate Precision and Recall for generated images using k-nearest neighbors.
     

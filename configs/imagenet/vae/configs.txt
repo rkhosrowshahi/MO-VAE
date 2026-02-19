@@ -1,7 +1,7 @@
 configs/imagenet/vae/mgda/config.yaml
-configs/imagenet/vae/mgda_l2/config.yaml
-configs/imagenet/vae/mgda_loss/config.yaml
-configs/imagenet/vae/mgda_loss_plus/config.yaml
+configs/imagenet/vae/mgda_ln/config.yaml
+configs/imagenet/vae/mgda_gn/config.yaml
+configs/imagenet/vae/mgda_lgn/config.yaml
 configs/imagenet/vae/sum/config.yaml
 configs/imagenet/vae/upgrad/config.yaml
 

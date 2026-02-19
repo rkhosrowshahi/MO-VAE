@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import inception_v3, Inception_V3_Weights, vgg16, VGG16_Weights
+from torchvision.transforms import functional as TF
 import numpy as np
 from scipy import linalg
 from scipy.spatial.distance import cdist
@@ -389,25 +390,25 @@ class InceptionV3(nn.Module):
         Returns:
             torch.Tensor: Feature vectors of shape (B, 2048)
         """
-        # Handle empty tensors
-        if x.numel() == 0:
-            return torch.empty((0, 2048), device=x.device, dtype=x.dtype)
+        # # Handle empty tensors
+        # if x.numel() == 0:
+        #     return torch.empty((0, 2048), device=x.device, dtype=x.dtype)
         
-        # Resize to 299x299 if needed
-        if x.size(-1) != 299 or x.size(-2) != 299:
-            x = F.interpolate(x, size=(299, 299), mode='bilinear', align_corners=False)
+        # # Resize to 299x299 if needed
+        # if x.size(-1) != 299 or x.size(-2) != 299:
+        #     x = F.interpolate(x, size=(299, 299), mode='bilinear', align_corners=False)
         
-        # Normalize to [0, 1] if in [-1, 1] range
-        if x.min() < 0:
-            x = (x + 1) / 2
+        # # Normalize to [0, 1] if in [-1, 1] range
+        # if x.min() < 0:
+        #     x = (x + 1) / 2
         
-        # Clamp to valid range
-        x = torch.clamp(x, 0, 1)
+        # # Clamp to valid range
+        # x = torch.clamp(x, 0, 1)
         
-        # Normalize for Inception (ImageNet normalization)
-        mean = torch.tensor([0.485, 0.456, 0.406], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
-        x = (x - mean) / std
+        # # Normalize for Inception (ImageNet normalization)
+        # mean = torch.tensor([0.485, 0.456, 0.406], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+        # std = torch.tensor([0.229, 0.224, 0.225], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+        # x = (x - mean) / std
         
         # Get features from the last pooling layer
         x = self.model.Conv2d_1a_3x3(x)
@@ -493,7 +494,7 @@ class InceptionV3ForIS(nn.Module):
         return x
 
 
-def calculate_fid(real_images, fake_images, device='cuda', batch_size=50):
+def calculate_fid(real_images, fake_images, device='cuda', batch_size=50, eps=1e-6):
     """
     Calculate Fréchet Inception Distance (FID) between real and fake images.
     
@@ -520,25 +521,40 @@ def calculate_fid(real_images, fake_images, device='cuda', batch_size=50):
     # Handle empty inputs
     if real_images.numel() == 0 or fake_images.numel() == 0:
         return float('nan')
-    
+
+    # Denormalize for Inception (Inception expects [0,1] range after transform)
+    def denormalize(imgs):
+        imgs = (imgs * 0.5) + 0.5  # Undo CelebA norm
+        return imgs.clamp(0, 1)
+
+    real_images = denormalize(real_images)
+    fake_images = denormalize(fake_images)
+
+    # Inception transform on tensor (resize shorter side 299, center crop, ImageNet normalize)
+    def _inception_preprocess(batch):
+        batch = TF.resize(batch, 299, interpolation=TF.InterpolationMode.BICUBIC, antialias=True)
+        batch = TF.center_crop(batch, [299, 299])
+        return TF.normalize(batch, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
     inception = InceptionV3(device=device)
     inception.eval()
-    
-    def get_features(images):
+
+    def extract_features(images, inception):
         features_list = []
         with torch.no_grad():
             for i in range(0, len(images), batch_size):
                 batch = images[i:i+batch_size].to(device)
                 if batch.numel() == 0:
                     continue
+                batch = _inception_preprocess(batch)
                 features = inception(batch)
                 features_list.append(features.cpu())
         if len(features_list) == 0:
             return np.array([])
         return torch.cat(features_list, dim=0).numpy()
     
-    real_features = get_features(real_images)
-    fake_features = get_features(fake_images)
+    real_features = extract_features(real_images, inception)
+    fake_features = extract_features(fake_images, inception)
     
     # Handle empty feature arrays
     if len(real_features) == 0 or len(fake_features) == 0:
@@ -555,27 +571,247 @@ def calculate_fid(real_images, fake_images, device='cuda', batch_size=50):
         sigma2 = np.array([[sigma2]])
     
     # Calculate sum squared difference between means
-    ssdiff = np.sum((mu1 - mu2) ** 2.0)
+    diff = mu1 - mu2
+    ssdiff = diff.dot(diff)
     
-    # Calculate sqrt of product between cov
-    # Product might be almost singular, use offset for numerical stability
-    offset = np.eye(sigma1.shape[0]) * 1e-6
-    covmean, _ = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset), disp=False)
-    
-    # Check and correct imaginary numbers from sqrt
-    # (small imaginary components are numerical artifacts)
+    # Product might be almost singular
+    covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
+    if not np.isfinite(covmean).all():
+        msg = (
+            "fid calculation produces singular product; "
+            "adding %s to diagonal of cov estimates"
+        ) % eps
+        print(msg)
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+
+    # Numerical error might give slight imaginary component
     if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError("Imaginary component {}".format(m))
         covmean = covmean.real
-    
-    # Check for NaN (can occur with degenerate covariances)
-    if np.isnan(covmean).any():
-        # Fall back: return FID without the covariance term
-        return float(ssdiff + np.trace(sigma1) + np.trace(sigma2))
-    
+    covmean = np.trace(covmean)
     # Calculate FID
-    fid = ssdiff + np.trace(sigma1 + sigma2 - 2.0 * covmean)
+    fid = ssdiff + np.trace(sigma1) + np.trace(sigma2) - 2.0 * covmean
     
     return float(fid)
+
+
+def extract_inception_features(images, device='cuda', batch_size=50):
+    """
+    Extract InceptionV3 features once for reuse by FID, KID, and Precision/Recall.
+    
+    Args:
+        images: Tensor (N, C, H, W) in [0, 1] or [-1, 1]
+        device: Device for computation
+        batch_size: Batch size for forward passes
+        
+    Returns:
+        np.ndarray: Features of shape (N, 2048), or empty array if no images.
+    """
+    if images.numel() == 0:
+        return np.array([])
+    imgs = (images * 0.5) + 0.5
+    imgs = imgs.clamp(0, 1)
+
+    def _inception_preprocess(batch):
+        batch = TF.resize(batch, 299, interpolation=TF.InterpolationMode.BICUBIC, antialias=True)
+        batch = TF.center_crop(batch, [299, 299])
+        return TF.normalize(batch, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+    inception = InceptionV3(device=device)
+    inception.eval()
+    features_list = []
+    with torch.no_grad():
+        for i in range(0, len(imgs), batch_size):
+            batch = imgs[i:i+batch_size].to(device)
+            if batch.numel() == 0:
+                continue
+            batch = _inception_preprocess(batch)
+            features = inception(batch)
+            features_list.append(features.cpu())
+    if len(features_list) == 0:
+        return np.array([])
+    return torch.cat(features_list, dim=0).numpy()
+
+
+def fid_from_features(real_features, fake_features, eps=1e-6):
+    """Compute FID from pre-extracted Inception features. Lower is better."""
+    if len(real_features) == 0 or len(fake_features) == 0:
+        return float('nan')
+    mu1, sigma1 = real_features.mean(axis=0), np.cov(real_features, rowvar=False)
+    mu2, sigma2 = fake_features.mean(axis=0), np.cov(fake_features, rowvar=False)
+    if sigma1.ndim == 0:
+        sigma1 = np.array([[sigma1]])
+    if sigma2.ndim == 0:
+        sigma2 = np.array([[sigma2]])
+    diff = mu1 - mu2
+    ssdiff = diff.dot(diff)
+    covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
+    if not np.isfinite(covmean).all():
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError("Imaginary component {}".format(m))
+        covmean = covmean.real
+    covmean = np.trace(covmean)
+    return float(ssdiff + np.trace(sigma1) + np.trace(sigma2) - 2.0 * covmean)
+
+
+def kid_from_features(real_features, fake_features, subset_size=50, n_subsets=50, degree=3, gamma=None):
+    """Compute KID from pre-extracted Inception features. Lower is better."""
+    if len(real_features) == 0 or len(fake_features) == 0:
+        return float('nan')
+    n_real, dim = real_features.shape
+    n_fake = fake_features.shape[0]
+    if gamma is None:
+        gamma = 1.0 / dim
+    def poly_kernel(X, Y):
+        return (gamma * (X @ Y.T) + 1.0) ** degree
+    subset_size = min(subset_size, n_real, n_fake)
+    if subset_size < 2:
+        return float('nan')
+    rng = np.random.default_rng()
+    kid_values = []
+    for _ in range(n_subsets):
+        idx_real = rng.choice(n_real, size=subset_size, replace=False)
+        idx_fake = rng.choice(n_fake, size=subset_size, replace=False)
+        r, f = real_features[idx_real], fake_features[idx_fake]
+        K_rr = poly_kernel(r, r)
+        K_ff = poly_kernel(f, f)
+        K_rf = poly_kernel(r, f)
+        np.fill_diagonal(K_rr, 0)
+        np.fill_diagonal(K_ff, 0)
+        n = subset_size
+        mmd2 = K_rr.sum() / (n * (n - 1)) + K_ff.sum() / (n * (n - 1)) - 2.0 * K_rf.mean()
+        kid_values.append(max(0.0, mmd2))
+    return float(np.mean(kid_values))
+
+
+def precision_recall_from_features(real_features, fake_features, k=5):
+    """Compute Precision and Recall from pre-extracted Inception features."""
+    if len(real_features) == 0 or len(fake_features) == 0:
+        return float('nan'), float('nan')
+    if len(real_features) <= k or len(fake_features) <= k:
+        return float('nan'), float('nan')
+    distances_fake_to_real = cdist(fake_features, real_features, metric='euclidean')
+    distances_real_to_fake = cdist(real_features, fake_features, metric='euclidean')
+    distances_real_to_real = cdist(real_features, real_features, metric='euclidean')
+    distances_fake_to_fake = cdist(fake_features, fake_features, metric='euclidean')
+    np.fill_diagonal(distances_real_to_real, np.inf)
+    np.fill_diagonal(distances_fake_to_fake, np.inf)
+    real_knn_radii = np.partition(distances_real_to_real, k-1, axis=1)[:, k-1]
+    fake_knn_radii = np.partition(distances_fake_to_fake, k-1, axis=1)[:, k-1]
+    precision_scores = []
+    for i in range(len(fake_features)):
+        nearest_real_idx = np.argmin(distances_fake_to_real[i])
+        dist_to_nearest = distances_fake_to_real[i, nearest_real_idx]
+        precision_scores.append(float(dist_to_nearest <= real_knn_radii[nearest_real_idx]))
+    recall_scores = []
+    for i in range(len(real_features)):
+        nearest_fake_idx = np.argmin(distances_real_to_fake[i])
+        dist_to_nearest = distances_real_to_fake[i, nearest_fake_idx]
+        recall_scores.append(float(dist_to_nearest <= fake_knn_radii[nearest_fake_idx]))
+    return float(np.mean(precision_scores)), float(np.mean(recall_scores))
+
+
+def calculate_kid(real_images, fake_images, device='cuda', batch_size=50, subset_size=50, n_subsets=50, degree=3, gamma=None):
+    """
+    Calculate Kernel Inception Distance (KID) between real and fake images.
+    
+    KID measures the squared Maximum Mean Discrepancy (MMD) between Inception
+    features of real and generated images using a polynomial kernel. It is an
+    alternative to FID that does not assume Gaussian distributions and is
+    more stable with limited samples.
+    
+    Note: KID is a distance/error metric where LOWER is better.
+    
+    Args:
+        real_images: Tensor of real images (N, C, H, W) in [0, 1] or [-1, 1]
+        fake_images: Tensor of fake/generated images (M, C, H, W) in [0, 1] or [-1, 1]
+        device: Device for computation
+        batch_size: Batch size for Inception feature extraction
+        subset_size: Number of samples per subset for unbiased KID estimate (default 50)
+        n_subsets: Number of subsets to average over (default 50)
+        degree: Polynomial kernel degree (default 3)
+        gamma: Kernel scale; if None, uses 1/feature_dim (default)
+        
+    Returns:
+        float: KID (squared MMD). Lower is better.
+    """
+    if real_images.numel() == 0 or fake_images.numel() == 0:
+        return float('nan')
+
+    def denormalize(imgs):
+        imgs = (imgs * 0.5) + 0.5
+        return imgs.clamp(0, 1)
+    real_images = denormalize(real_images)
+    fake_images = denormalize(fake_images)
+
+    def _inception_preprocess(batch):
+        batch = TF.resize(batch, 299, antialias=True)
+        batch = TF.center_crop(batch, [299, 299])
+        return TF.normalize(batch, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+    inception = InceptionV3(device=device)
+    inception.eval()
+
+    def extract_features(images, inception):
+        features_list = []
+        with torch.no_grad():
+            for i in range(0, len(images), batch_size):
+                batch = images[i:i+batch_size].to(device)
+                if batch.numel() == 0:
+                    continue
+                batch = _inception_preprocess(batch)
+                features = inception(batch)
+                features_list.append(features.cpu())
+        if len(features_list) == 0:
+            return np.array([])
+        return torch.cat(features_list, dim=0).numpy()
+
+    real_features = extract_features(real_images, inception)
+    fake_features = extract_features(fake_images, inception)
+    if len(real_features) == 0 or len(fake_features) == 0:
+        return float('nan')
+
+    n_real, dim = real_features.shape
+    n_fake = fake_features.shape[0]
+    if gamma is None:
+        gamma = 1.0 / dim
+
+    def poly_kernel(X, Y):
+        # k(x,y) = (gamma * x'y + 1)^degree
+        K = (gamma * (X @ Y.T) + 1.0) ** degree
+        return K
+
+    subset_size = min(subset_size, n_real, n_fake)
+    if subset_size < 2:
+        return float('nan')
+
+    rng = np.random.default_rng()
+    kid_values = []
+    for _ in range(n_subsets):
+        idx_real = rng.choice(n_real, size=subset_size, replace=False)
+        idx_fake = rng.choice(n_fake, size=subset_size, replace=False)
+        r = real_features[idx_real]
+        f = fake_features[idx_fake]
+        # Unbiased MMD^2: E[k(x,x')] + E[k(y,y')] - 2*E[k(x,y)], excluding diagonal
+        K_rr = poly_kernel(r, r)
+        K_ff = poly_kernel(f, f)
+        K_rf = poly_kernel(r, f)
+        np.fill_diagonal(K_rr, 0)
+        np.fill_diagonal(K_ff, 0)
+        n = subset_size
+        term_rr = K_rr.sum() / (n * (n - 1))
+        term_ff = K_ff.sum() / (n * (n - 1))
+        term_rf = K_rf.mean()
+        mmd2 = term_rr + term_ff - 2.0 * term_rf
+        kid_values.append(max(0.0, mmd2))
+    return float(np.mean(kid_values))
 
 
 def calculate_inception_score(images, device='cuda', batch_size=50, splits=10):
@@ -606,10 +842,23 @@ def calculate_inception_score(images, device='cuda', batch_size=50, splits=10):
     # Handle empty inputs
     if images.numel() == 0:
         return float('nan'), float('nan')
-    
-    inception = InceptionV3ForIS(device=device)
-    inception.eval()
-    
+
+    # Denormalize for Inception (Inception expects [0,1] range after transform)
+    def denormalize(imgs):
+        imgs = (imgs * 0.5) + 0.5  # Undo CelebA norm
+        return imgs.clamp(0, 1)
+
+    images = denormalize(images)
+
+    # Inception transform on tensor (resize shorter side 299, center crop, ImageNet normalize)
+    def _inception_preprocess(batch):
+        batch = TF.resize(batch, 299, antialias=True)
+        batch = TF.center_crop(batch, [299, 299])
+        return TF.normalize(batch, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+    inception = inception_v3(weights=Inception_V3_Weights.DEFAULT, transform_input=False)
+    inception = inception.to(device).eval()
+
     # Get predictions for all images
     preds = []
     with torch.no_grad():
@@ -617,6 +866,7 @@ def calculate_inception_score(images, device='cuda', batch_size=50, splits=10):
             batch = images[i:i+batch_size].to(device)
             if batch.numel() == 0:
                 continue
+            batch = _inception_preprocess(batch)
             logits = inception(batch)
             probs = F.softmax(logits, dim=1)
             preds.append(probs.cpu().numpy())
@@ -677,10 +927,22 @@ def calculate_precision_recall(real_images, fake_images, device='cuda', batch_si
     # Handle empty inputs
     if real_images.numel() == 0 or fake_images.numel() == 0:
         return float('nan'), float('nan')
-    
+
+    # Same preprocessing as FID/IS: denormalize then resize/crop/ImageNet-normalize
+    def denormalize(imgs):
+        imgs = (imgs * 0.5) + 0.5
+        return imgs.clamp(0, 1)
+    real_images = denormalize(real_images)
+    fake_images = denormalize(fake_images)
+
+    def _inception_preprocess(batch):
+        batch = TF.resize(batch, 299, antialias=True)
+        batch = TF.center_crop(batch, [299, 299])
+        return TF.normalize(batch, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
     inception = InceptionV3(device=device)
     inception.eval()
-    
+
     def get_features(images):
         features_list = []
         with torch.no_grad():
@@ -688,12 +950,13 @@ def calculate_precision_recall(real_images, fake_images, device='cuda', batch_si
                 batch = images[i:i+batch_size].to(device)
                 if batch.numel() == 0:
                     continue
+                batch = _inception_preprocess(batch)
                 features = inception(batch)
                 features_list.append(features.cpu())
         if len(features_list) == 0:
             return np.array([])
         return torch.cat(features_list, dim=0).numpy()
-    
+
     real_features = get_features(real_images)
     fake_features = get_features(fake_images)
     

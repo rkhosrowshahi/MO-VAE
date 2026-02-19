@@ -312,7 +312,7 @@ def evaluate(net, data_loader, device, args):
     return loss_meters
 
 
-def _compute_recon_metrics_from_tensors(real_t, recon_t, device, batch_size_metric=50, min_size_for_lpips=64):
+def _compute_recon_metrics_from_tensors(real_t, recon_t, device, batch_size_metric=128, min_size_for_lpips=64):
     """Compute rFID, PSNR, SSIM, LPIPS from already-collected real and recon tensors."""
     out = {'rfid': float('nan'), 'psnr': float('nan'), 'ssim': float('nan'), 'lpips': float('nan')}
     n = min(real_t.size(0), recon_t.size(0))
@@ -347,7 +347,7 @@ def _compute_recon_metrics_from_tensors(real_t, recon_t, device, batch_size_metr
         out['lpips'] = np.mean(lpips_vals)
     if img_size >= min_size_for_lpips and n >= 2:
         try:
-            out['rfid'] = calculate_fid(real_t, recon_t, device=device, batch_size=50)
+            out['rfid'] = calculate_fid(real_t, recon_t, device=device, batch_size=128)
         except Exception as e:
             tqdm.write(f"Warning: rFID computation failed: {e}")
     return out
@@ -787,12 +787,17 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     if img_size >= min_size_for_imagenet_metrics:
         tqdm.write("Extracting Inception features (shared for gFID, KID, Precision/Recall)...")
         try:
-            real_features = extract_inception_features(real_images.cpu(), device=device, batch_size=50)
-            fake_features = extract_inception_features(generated_images.cpu(), device=device, batch_size=50)
+            real_features = extract_inception_features(real_images, device=device, batch_size=128)
+            tqdm.write(f"Real features shape: {real_features.shape}")
+            fake_features = extract_inception_features(generated_images, device=device, batch_size=128)
+            tqdm.write(f"Fake features shape: {fake_features.shape}")
             if len(real_features) > 0 and len(fake_features) > 0:
                 gfid_value = fid_from_features(real_features, fake_features)
+                tqdm.write(f"GFID value: {gfid_value}")
                 kid_value = kid_from_features(real_features, fake_features)
+                tqdm.write(f"KID value: {kid_value}")
                 precision, recall = precision_recall_from_features(real_features, fake_features, k=5)
+                tqdm.write(f"Precision: {precision}, Recall: {recall}")
         except Exception as e:
             tqdm.write(f"Warning: gFID/KID/Precision/Recall computation failed: {e}")
     
@@ -805,7 +810,7 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             is_mean, is_std = calculate_inception_score(
                 generated_images.cpu(),
                 device=device,
-                batch_size=50
+                batch_size=128
             )
         except Exception as e:
             tqdm.write(f"Warning: Inception Score computation failed: {e}")

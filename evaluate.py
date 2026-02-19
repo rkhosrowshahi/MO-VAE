@@ -191,8 +191,8 @@ def print_results_table(loss_meters, recon_metrics, gen_metrics, hv_value=None):
         ["gFID", format_value(gen_metrics.get('gfid', float('nan')), 'gfid')],
         ["IS Mean", format_value(gen_metrics.get('inception_score_mean', float('nan')), 'inception_score_mean')],
         ["IS Std", format_value(gen_metrics.get('inception_score_std', float('nan')), 'inception_score_std')],
-        ["Precision", format_value(gen_metrics.get('precision', float('nan')), 'precision')],
-        ["Recall", format_value(gen_metrics.get('recall', float('nan')), 'recall')],
+        # ["Precision", format_value(gen_metrics.get('precision', float('nan')), 'precision')],  # Commented out
+        # ["Recall", format_value(gen_metrics.get('recall', float('nan')), 'recall')],              # Commented out
         ["KID", format_value(gen_metrics.get('kid', float('nan')), 'kid')],
     ]
     if HAS_TABULATE:

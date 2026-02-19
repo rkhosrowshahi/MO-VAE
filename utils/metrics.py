@@ -691,7 +691,7 @@ def kid_from_features(real_features, fake_features, subset_size=50, n_subsets=50
     return float(np.mean(kid_values))
 
 
-def precision_recall_from_features(real_features, fake_features, k=5):
+def precision_recall_from_features(real_features, fake_features, k=3):
     """Compute Precision and Recall from pre-extracted Inception features."""
     if len(real_features) == 0 or len(fake_features) == 0:
         return float('nan'), float('nan')

@@ -1,8 +1,46 @@
+import os
 import numpy as np
 import torch
 from torchvision import datasets, transforms
 from datasets import load_dataset
 from torch.utils.data import Dataset
+
+
+def _celeba_data_exists(data_dir):
+    """Return True if CelebA images and split file exist under data_dir (root for torchvision CelebA)."""
+    celeba_dir = os.path.join(data_dir, "celeba")
+    img_dir = os.path.join(celeba_dir, "img_align_celeba")
+    partition_file = os.path.join(celeba_dir, "list_eval_partition.txt")
+    if not os.path.isdir(img_dir):
+        return False
+    if not os.path.isfile(partition_file):
+        return False
+    # At least one image
+    try:
+        names = [f for f in os.listdir(img_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        return len(names) > 0
+    except OSError:
+        return False
+
+
+def _ensure_celeba_downloaded(data_dir):
+    """If CelebA is not present at data_dir, download it via torchvision (requires gdown)."""
+    if _celeba_data_exists(data_dir):
+        return
+    os.makedirs(data_dir, exist_ok=True)
+    print(f"CelebA not found at {data_dir}. Downloading CelebA (this may take a while)...")
+    try:
+        # Trigger torchvision download: creates data_dir/celeba/ and downloads img_align_celeba etc.
+        datasets.CelebA(root=data_dir, split="train", download=True)
+        if not _celeba_data_exists(data_dir):
+            raise RuntimeError("CelebA download completed but data directory is still missing or invalid.")
+        print("CelebA download finished successfully.")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to download CelebA to {data_dir}. "
+            "You can manually download from https://drive.google.com/drive/folders/0B7EVK8r0v71pWEZsZE9oNnFzTm8 and "
+            "extract so that 'celeba/img_align_celeba' and 'celeba/list_eval_partition.txt' exist under the data_dir."
+        ) from e
 
 def set_seed(seed):
     """
@@ -272,6 +310,8 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         train_transforms = transforms.Compose(train_transforms)
         val_transforms = transforms.Compose(val_transforms)
 
+        _ensure_celeba_downloaded(data_dir)
+
         train_dataset = MyCelebA(
             data_dir,
             split='train',
@@ -309,6 +349,8 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
 
         train_transforms = transforms.Compose(train_transforms)
         val_transforms = transforms.Compose(val_transforms)
+
+        _ensure_celeba_downloaded(data_dir)
 
         train_dataset = MyCelebA(
             data_dir,

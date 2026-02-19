@@ -11,3 +11,4 @@ pyrightconfig.json
 logs/
 examples/
 .env
+notebooks/

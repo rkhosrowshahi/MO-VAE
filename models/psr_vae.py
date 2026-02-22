@@ -145,7 +145,7 @@ class PSRVAE(VAE):
         #   reconstruction_loss  ←→  "how well does the model encode/decode data?"
         #   psr_loss             ←→  "how well does the decoder generate from the prior?"
         weighted_kld = lambda_kld * standard_kld
-        weighted_recon_loss = lambda_recon * recon_loss + weighted_kld
+        weighted_recon_loss = lambda_recon * recon_loss # + weighted_kld
         weighted_psr_loss = lambda_psr * psr_kld
 
         total_loss = weighted_recon_loss + weighted_psr_loss

@@ -28,7 +28,9 @@ class RecursiveKLVAE(VAE):
         if isinstance(lambda_weights, list) and len(lambda_weights) >= 3:
             kwargs = {**kwargs, "lambda_weights": lambda_weights[:2]}
         super().__init__(**kwargs)
-        self.features = ["mu", "log_var", "mu_hat", "log_var_hat"]
+        # No task-specific heads: all params are shared. Use backward() not mtl_backward()
+        # so we don't require task_params vs shared_params split (avoids torchjd error).
+        self.features = None
         # Add recursive_kld_loss (same KL fn, separate weight)
         self.objectives["recursive_kld_loss"] = self.objectives["kld_loss"]
         if isinstance(lambda_weights, list) and len(lambda_weights) >= 3:

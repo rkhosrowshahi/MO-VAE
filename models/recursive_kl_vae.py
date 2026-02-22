@@ -75,7 +75,7 @@ class RecursiveKLVAE(VAE):
 
         return {
             "reconstruction_loss": weighted_recon_loss,
-            "kld_loss": weighted_kld_loss,
+            # "kld_loss": weighted_kld_loss,
             "recursive_kld_loss": weighted_recursive_kld,
             "total_loss": total_loss,
         }

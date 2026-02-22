@@ -418,9 +418,10 @@ class VQVAE(nn.Module):
                 weighted_loss = commitment_loss
             else:
                 weighted_loss = value(inputs, recons)
-            
+
             loss_dict[key] = self.lambda_weights[key] * weighted_loss
 
+        loss_dict["total_loss"] = sum(loss_dict.values())
         return loss_dict
 
     def get_code_indices(self, input: Tensor) -> Tensor:

@@ -339,12 +339,19 @@ class BetaTCVAE(nn.Module):
         weighted_mi_loss = self.lambda_weights["mi_loss"] * mi_loss
         weighted_tc_loss = self.lambda_weights["tc_loss"] * weight * tc_loss
         weighted_kld_loss = self.lambda_weights["kld"] * weight * anneal_rate * kld_loss
-        
+        total_loss = (
+            weighted_recons_loss
+            + weighted_mi_loss
+            + weighted_tc_loss
+            + weighted_kld_loss
+        )
+
         return {
             "reconstruction_loss": weighted_recons_loss,
             "mi_loss": weighted_mi_loss,
             "tc_loss": weighted_tc_loss,
             "kld": weighted_kld_loss,
+            "total_loss": total_loss,
         }
 
     def sample(self, num_samples: int, device: int = None, **kwargs) -> Tensor:

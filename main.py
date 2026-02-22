@@ -141,7 +141,7 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
 
         outputs = net(images)
         loss_dict = net.loss_function(images, args=outputs)
-        total_loss = sum(loss_dict.values())
+        total_loss = loss_dict["total_loss"]
 
         if total_loss.item() > 1e15:
             tqdm.write(f"Step {step}: EXPLODING: Total loss: {total_loss.item():.6e}, Losses: {loss_dict}")
@@ -163,18 +163,20 @@ def train_epoch(net, train_loader, optimizer, aggregator, step, device, args):
                 if net.features is not None:
                     features = [outputs[feature] for feature in net.features]
 
+                # Exclude total_loss so MTL aggregator gets only component losses
+                component_losses = [v for k, v in loss_dict.items() if k != "total_loss"]
                 if isinstance(aggregator, MGDA) or isinstance(aggregator, COMFORT):
-                    aggregator.set_losses(torch.stack(list(loss_dict.values())))
-                
+                    aggregator.set_losses(torch.stack(component_losses))
+
                 if features is not None:
                     mtl_backward(
-                        losses=list(loss_dict.values()),
+                        losses=component_losses,
                         features=features,
                         aggregator=aggregator,
                         retain_graph=True,
                     )
                 else:
-                    backward(loss_dict.values(), aggregator=aggregator)
+                    backward(component_losses, aggregator=aggregator)
         except RuntimeError as e:
             # Catch CUDA assertion errors (e.g., from BCE loss with values outside [0,1])
             # This can happen with Aligned-MTL aggregation
@@ -251,12 +253,12 @@ def evaluate(net, data_loader, device, args):
             images = images.to(device)
             outputs = net(images)
             loss_dict = net.loss_function(images, args=outputs)
-            total_loss = sum(loss_dict.values())
+            total_loss = loss_dict["total_loss"]
 
             loss_meters["total_loss"].update(total_loss.item())
             for key, value in loss_dict.items():
                 loss_meters[key].update(value.item())
-            
+
             # Accumulate codebook indices across batches for accurate utilization calculation
             # Handle VQVAE (single codebook) and VQVAE2 (two codebooks)
             if "encoding_inds" in outputs and outputs["encoding_inds"] is not None:
@@ -380,7 +382,7 @@ def evaluate_with_recon_metrics(net, data_loader, device, args):
             images = images.to(device)
             outputs = net(images)
             loss_dict = net.loss_function(images, args=outputs)
-            total_loss = sum(loss_dict.values())
+            total_loss = loss_dict["total_loss"]
             loss_meters["total_loss"].update(total_loss.item())
             for key, value in loss_dict.items():
                 loss_meters[key].update(value.item())

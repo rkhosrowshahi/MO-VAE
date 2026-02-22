@@ -367,11 +367,17 @@ class VQVAE2(nn.Module):
         weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
         weighted_commitment_loss = self.lambda_weights["commitment_loss"] * commitment_loss
         weighted_embedding_loss = self.lambda_weights["embedding_loss"] * embedding_loss
-        
+        total_loss = (
+            weighted_recon_loss
+            + weighted_commitment_loss
+            + weighted_embedding_loss
+        )
+
         return {
             "reconstruction_loss": weighted_recon_loss,
             "commitment_loss": weighted_commitment_loss,
             "embedding_loss": weighted_embedding_loss,
+            "total_loss": total_loss,
         }
 
     def get_code_indices(self, input: Tensor) -> Dict[str, Tensor]:

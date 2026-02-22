@@ -1,5 +1,6 @@
 from .vae import VAE
 from .gg_vae import GGVAE
+from .recursive_kl_vae import RecursiveKLVAE
 from .vq_vae import VQVAE
 from .gg_vq_vae import GGVQVAE
 from .vq_vae2 import VQVAE2
@@ -25,6 +26,11 @@ def get_network(input_size, num_channels=3, args=None, device=None):
         if lambda_weights is None:
             lambda_weights = [1.0, 0.00025]
         return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+    elif arch.lower() == 'recursive_kl_vae':
+        # Recursive KL: [reconstruction, kld, recursive_kld]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 0.00025, 1.0]
+        return RecursiveKLVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'gg_vae':
         # Default lambda_weights for GGVAE: [reconstruction, gradient_guided, kld]
         if lambda_weights is None:

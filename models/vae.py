@@ -253,8 +253,13 @@ class VAE(nn.Module):
         # Apply lambda_weights using dictionary keys matching self.objectives
         weighted_recon_loss = self.lambda_weights["reconstruction_loss"] * recon_loss
         weighted_kld_loss = self.lambda_weights["kld_loss"] * kld_loss
+        total_loss = weighted_recon_loss + weighted_kld_loss
 
-        return {"reconstruction_loss": weighted_recon_loss, "kld_loss": weighted_kld_loss}
+        return {
+            "reconstruction_loss": weighted_recon_loss,
+            "kld_loss": weighted_kld_loss,
+            "total_loss": total_loss,
+        }
 
     def sample(self, num_samples=1, device=None):
         """

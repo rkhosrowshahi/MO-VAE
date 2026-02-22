@@ -163,10 +163,17 @@ class GGVAE(VAE):
         weighted_gradient_guided_loss = self.lambda_weights["gradient_guided_loss"] * gradient_guided_loss
         weighted_edge_matching_loss = self.lambda_weights["edge_matching_loss"] * edge_matching_loss
         weighted_kld_loss = self.lambda_weights["kld_loss"] * kld_loss
+        total_loss = (
+            weighted_recon_loss
+            + weighted_gradient_guided_loss
+            + weighted_edge_matching_loss
+            + weighted_kld_loss
+        )
 
         return {
-            "reconstruction_loss": weighted_recon_loss, 
+            "reconstruction_loss": weighted_recon_loss,
             "gradient_guided_loss": weighted_gradient_guided_loss,
             "edge_matching_loss": weighted_edge_matching_loss,
-            "kld_loss": weighted_kld_loss
+            "kld_loss": weighted_kld_loss,
+            "total_loss": total_loss,
         }

@@ -3,6 +3,9 @@ from .gg_vae import GGVAE
 from .recursive_kl_vae import RecursiveKLVAE
 from .psr_vae import PSRVAE
 from .cycle_vae import CycleVAE
+from .recursive_cyclic_vae import RecursiveCyclicVAE
+from .sphere_encoder import SphereEncoder
+from .sphere_encoder_vit import SphereEncoderViT
 from .vq_vae import VQVAE
 from .gg_vq_vae import GGVQVAE
 from .vq_vae2 import VQVAE2
@@ -31,7 +34,7 @@ def get_network(input_size, num_channels=3, args=None, device=None):
     elif arch.lower() == 'recursive_kl_vae':
         # Recursive KL: [reconstruction, kld, recursive_kld]
         if lambda_weights is None:
-            lambda_weights = [1.0, 0.00025, 1.0]
+            lambda_weights = [1.0, 0.00025]
         return RecursiveKLVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'psr_vae':
         # Prior Sample Round-Trip VAE: [reconstruction, kld, psr]
@@ -44,6 +47,78 @@ def get_network(input_size, num_channels=3, args=None, device=None):
         if lambda_weights is None:
             lambda_weights = [1.0, 0.00025]
         return CycleVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+    elif arch.lower() == 'recursive_cyclic_vae' or arch.lower() == 'rc_vae':
+        # Recursive Cyclic VAE: [reconstruction, recursive_kld, cycle]
+        if lambda_weights is None:
+            lambda_weights = [1.0, 0.00025, 0.00025]
+        return RecursiveCyclicVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+    elif arch.lower() == 'sphere_encoder':
+        # Sphere Encoder (arXiv:2602.15030): spherical latent, pix_recon + pix_con + lat_con
+        # lambda_weights unused; use model kwargs for sigma_max_angle_deg, lambda_* if needed
+        sigma_max_angle_deg = getattr(args, "sigma_max_angle_deg", 80.0)
+        sigma_mix_prob = getattr(args, "sigma_mix_prob", 0.0)
+        sigma_mix_angle_min_deg = getattr(args, "sigma_mix_angle_min_deg", None)
+        sigma_mix_angle_max_deg = getattr(args, "sigma_mix_angle_max_deg", None)
+        lambda_pix_recon = getattr(args, "lambda_pix_recon", 1.0)
+        lambda_pix_con = getattr(args, "lambda_pix_con", 0.5)
+        lambda_lat_con = getattr(args, "lambda_lat_con", 0.1)
+        return SphereEncoder(
+            latent_dim=latent_dim,
+            hidden_dims=hidden_dims,
+            input_size=input_size,
+            in_channels=num_channels,
+            recons_dist=recons_dist,
+            recons_reduction=recons_reduction,
+            lambda_weights=[1.0, 0.0],
+            sigma_max_angle_deg=sigma_max_angle_deg,
+            sigma_mix_prob=sigma_mix_prob,
+            sigma_mix_angle_min_deg=sigma_mix_angle_min_deg,
+            sigma_mix_angle_max_deg=sigma_mix_angle_max_deg,
+            lambda_pix_recon=lambda_pix_recon,
+            lambda_pix_con=lambda_pix_con,
+            lambda_lat_con=lambda_lat_con,
+            device=device,
+        )
+    elif arch.lower() == 'sphere_encoder_vit':
+        # Sphere Encoder ViT (paper arch): ViT + MLP-Mixer + RoPE + sinusoidal
+        sigma_max_angle_deg = getattr(args, "sigma_max_angle_deg", 80.0)
+        sigma_mix_prob = getattr(args, "sigma_mix_prob", 0.0)
+        sigma_mix_angle_min_deg = getattr(args, "sigma_mix_angle_min_deg", None)
+        sigma_mix_angle_max_deg = getattr(args, "sigma_mix_angle_max_deg", None)
+        lambda_pix_recon = getattr(args, "lambda_pix_recon", 1.0)
+        lambda_pix_con = getattr(args, "lambda_pix_con", 0.5)
+        lambda_lat_con = getattr(args, "lambda_lat_con", 0.1)
+        patch_size = getattr(args, "patch_size", 2 if input_size <= 32 else 8)
+        num_patches = (input_size // patch_size) ** 2
+        # latent_dim = L (total spherical dim); latent_channels = L // num_patches per token
+        L = latent_dim
+        latent_channels = L // num_patches
+        if L != latent_channels * num_patches:
+            raise ValueError(f"sphere_encoder_vit: latent_dim {L} must be divisible by num_patches {num_patches}")
+        embed_dim = getattr(args, "vit_embed_dim", 1024)
+        depth = getattr(args, "vit_depth", 24)
+        num_heads = getattr(args, "vit_num_heads", 16)
+        mixer_depth = getattr(args, "vit_mixer_depth", 2)
+        return SphereEncoderViT(
+            img_size=input_size,
+            patch_size=patch_size,
+            in_channels=num_channels,
+            embed_dim=embed_dim,
+            depth=depth,
+            num_heads=num_heads,
+            mlp_ratio=4.0,
+            mixer_depth=mixer_depth,
+            latent_channels=latent_channels,
+            num_classes=getattr(args, "num_classes", 0),
+            sigma_max_angle_deg=sigma_max_angle_deg,
+            sigma_mix_prob=sigma_mix_prob,
+            sigma_mix_angle_min_deg=sigma_mix_angle_min_deg,
+            sigma_mix_angle_max_deg=sigma_mix_angle_max_deg,
+            lambda_pix_recon=lambda_pix_recon,
+            lambda_pix_con=lambda_pix_con,
+            lambda_lat_con=lambda_lat_con,
+            device=device,
+        )
     elif arch.lower() == 'gg_vae':
         # Default lambda_weights for GGVAE: [reconstruction, gradient_guided, kld]
         if lambda_weights is None:

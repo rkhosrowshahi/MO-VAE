@@ -1321,6 +1321,7 @@ if __name__ == "__main__":
     parser.add_argument("--embedding_dim", type=int, default=None)
     parser.add_argument("--num_embeddings", type=int, default=None)
     parser.add_argument("--anneal_steps", type=int, default=None)
+    parser.add_argument("--recursive_kld_anneal_steps", type=int, default=25000)
     # Sphere Encoder (arXiv:2602.15030) optional args
     parser.add_argument("--sigma_max_angle_deg", type=float, default=80.0, help="Sphere encoder: max noise angle in degrees (paper: 80 for 32x32, 85 for 256x256)")
     parser.add_argument("--sigma_mix_prob", type=float, default=0.0, help="Sphere encoder: probability to sample alpha from a higher-angle mix band (paper: 0.1)")

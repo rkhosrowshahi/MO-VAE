@@ -32,10 +32,11 @@ def get_network(input_size, num_channels=3, args=None, device=None):
             lambda_weights = [1.0, 0.00025]
         return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'recursive_kl_vae':
-        # Recursive KL: [reconstruction, kld, recursive_kld]
+        # Recursive KL: [reconstruction, recursive_kld]
         if lambda_weights is None:
             lambda_weights = [1.0, 0.00025]
-        return RecursiveKLVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+        recursive_kld_anneal_steps = getattr(args, 'recursive_kld_anneal_steps', 25000)
+        return RecursiveKLVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, recursive_kld_anneal_steps=recursive_kld_anneal_steps, device=device)
     elif arch.lower() == 'psr_vae':
         # Prior Sample Round-Trip VAE: [reconstruction, kld, psr]
         if lambda_weights is None:

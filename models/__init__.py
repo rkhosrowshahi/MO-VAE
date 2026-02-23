@@ -1,7 +1,6 @@
 from .vae import VAE
 from .gg_vae import GGVAE
 from .recursive_kl_vae import RecursiveKLVAE
-from .psr_vae import PSRVAE
 from .cycle_vae import CycleVAE
 from .recursive_cyclic_vae import RecursiveCyclicVAE
 from .sphere_encoder import SphereEncoder
@@ -37,12 +36,6 @@ def get_network(input_size, num_channels=3, args=None, device=None):
             lambda_weights = [1.0, 0.00025]
         recursive_kld_anneal_steps = getattr(args, 'recursive_kld_anneal_steps', 25000)
         return RecursiveKLVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, recursive_kld_anneal_steps=recursive_kld_anneal_steps, device=device)
-    elif arch.lower() == 'psr_vae':
-        # Prior Sample Round-Trip VAE: [reconstruction, kld, psr]
-        if lambda_weights is None:
-            lambda_weights = [1.0, 0.00025, 0.00025]
-        detach_gen = getattr(args, 'detach_gen', False)
-        return PSRVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, detach_gen=detach_gen, device=device)
     elif arch.lower() == 'cycle_vae':
         # Cycle VAE: [reconstruction, cycle] (two weights only)
         if lambda_weights is None:

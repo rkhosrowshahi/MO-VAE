@@ -150,13 +150,11 @@ class PSRVAE(VAE):
         lambda_kld = self.lambda_weights["kld_loss"]
         lambda_cycle = self.lambda_weights["cycle_loss"]
 
-        # Standard KL folded into reconstruction_loss (ELBO form) so the two
-        # reported objectives remain semantically distinct.
         weighted_kld = lambda_kld * standard_kld
-        weighted_recon_loss = lambda_recon * recon_loss + weighted_kld
+        weighted_recon_loss = lambda_recon * recon_loss
         weighted_cycle_loss = lambda_cycle * cycle
 
-        total_loss = weighted_recon_loss + weighted_cycle_loss
+        total_loss = weighted_recon_loss + weighted_kld + weighted_cycle_loss
 
         return {
             "reconstruction_loss": weighted_recon_loss,

@@ -18,6 +18,7 @@ scheduler_gamma: 0.95
 aggregator: mgda_ln
 mgda_epsilon: 1e-5
 mgda_max_iters: 250
+recursive_kld_anneal_steps: 25000
 seed: 999
 save_path: logs/
 save_freq: 10
@@ -27,5 +28,5 @@ hv_ref: [1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba recursive_kl_vae 100ep 64bs lr1e-3 wd1e-5 mgda_l2 seed999
-wandb_group: celeba recursive_kl_vae 100ep 64bs lr1e-3 wd1e-5 mgda_l2
+wandb_name: celeba recursive_kl_vae mgda_l2 ann25k lr1e-3 wd1e-5 seed999
+wandb_group: celeba recursive_kl_vae mgda_l2 ann25k lr1e-3 wd1e-5

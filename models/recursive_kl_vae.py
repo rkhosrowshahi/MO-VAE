@@ -22,13 +22,21 @@ class RecursiveKLVAE(VAE):
     """
 
     def __init__(self, **kwargs):
+        # Base VAE expects 2 lambda_weights [recon, kld]; we accept 2 or 3 [recon, kld, recursive_kld]
+        lambda_weights = kwargs.get("lambda_weights", [1.0, 0.00025])
+        if isinstance(lambda_weights, list) and len(lambda_weights) >= 2:
+            kwargs = {**kwargs, "lambda_weights": lambda_weights[:2]}
         super().__init__(**kwargs)
         # No task-specific heads: all params are shared. Use backward() not mtl_backward()
         # so we don't require task_params vs shared_params split (avoids torchjd error).
         self.features = None
         # Add recursive_kld_loss (same KL fn, separate weight)
         self.objectives["recursive_kld_loss"] = self.objectives.pop("kld_loss")
-        self.lambda_weights["recursive_kld_loss"] = self.lambda_weights.pop("kld_loss")
+        kld_weight = self.lambda_weights.pop("kld_loss")
+        self.lambda_weights["recursive_kld_loss"] = (
+            lambda_weights[2] if isinstance(lambda_weights, list) and len(lambda_weights) >= 3
+            else kld_weight
+        )
 
     def forward(self, x):
         # First pass: encode -> decode (reconstruction)

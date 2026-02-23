@@ -1,11 +1,11 @@
-# CelebA GG-VAE - 10ep 64bs - MGDA loss+ (LGN)
+# CelebA GG-VAE - 10ep 64bs - MGDA (no normalization)
 dataset: CelebA
 data_dir: ../data
 normalize: false
 arch: gg_vae
 latent_dim: 128
 hidden_dims: [32, 64, 128, 256, 512]
-loss_weights: [1.0, 1.0, 1.0, 1.0]
+loss_weights: [1.0, 0.00039319, 1.0, 1.0]
 recons_dist: bernoulli
 recons_reduction: mean
 epochs: 100
@@ -15,10 +15,10 @@ lr: 0.001
 wd: 1e-5
 scheduler: exponential
 scheduler_gamma: 0.95
-aggregator: mgda_lgn
+aggregator: mgda
 mgda_epsilon: 1e-5
 mgda_max_iters: 250
-seed: 42
+seed: 999
 save_path: logs/
 save_freq: 10
 eval_freq: 1
@@ -27,5 +27,5 @@ hv_ref: [1.1, 1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba gg_vae w_kl=1.0 lr1e-3 wd1e-5 mgda_lgn seed42
-wandb_group: celeba gg_vae w_kl=1.0 lr1e-3 wd1e-5 mgda_lgn
+wandb_name: celeba gg_vae w_kl=3.93e-4 lr1e-3 wd1e-5 mgda seed999
+wandb_group: celeba gg_vae w_kl=3.93e-4 lr1e-3 wd1e-5 mgda

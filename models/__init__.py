@@ -28,25 +28,25 @@ def get_network(input_size, num_channels=3, args=None, device=None):
     if arch.lower() == 'vae':
         # Default lambda_weights for VAE: [reconstruction, kld]
         if lambda_weights is None:
-            lambda_weights = [1.0, args.dataset_size / args.batch_size]
+            lambda_weights = [1.0, args.batch_size / args.dataset_size]
         else:
-            lambda_weights[1] = args.dataset_size / args.batch_size
+            lambda_weights[1] = args.batch_size / args.dataset_size
         return VAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'recursive_kl_vae':
         # Recursive KL: [reconstruction, recursive_kld]
         if lambda_weights is None:
-            lambda_weights = [1.0, args.dataset_size / args.batch_size]
+            lambda_weights = [1.0, args.batch_size / args.dataset_size]
         recursive_kld_anneal_steps = getattr(args, 'recursive_kld_anneal_steps', 25000)
         return RecursiveKLVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, recursive_kld_anneal_steps=recursive_kld_anneal_steps, device=device)
     elif arch.lower() == 'cycle_vae':
         # Cycle VAE: [reconstruction, cycle] (two weights only)
         if lambda_weights is None:
-            lambda_weights = [1.0, args.dataset_size / args.batch_size]
+            lambda_weights = [1.0, args.batch_size / args.dataset_size]
         return CycleVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'recursive_cyclic_vae' or arch.lower() == 'rc_vae':
         # Recursive Cyclic VAE: [reconstruction, recursive_kld, cycle]
         if lambda_weights is None:
-            lambda_weights = [1.0, args.dataset_size / args.batch_size, args.dataset_size / args.batch_size]
+            lambda_weights = [1.0, args.batch_size / args.dataset_size, args.batch_size / args.dataset_size]
         recursive_kld_anneal_steps = getattr(args, 'recursive_kld_anneal_steps', 25000)
         return RecursiveCyclicVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, recursive_kld_anneal_steps=recursive_kld_anneal_steps, device=device)
     elif arch.lower() == 'sphere_encoder':
@@ -119,9 +119,9 @@ def get_network(input_size, num_channels=3, args=None, device=None):
     elif arch.lower() == 'gg_vae':
         # Default lambda_weights for GGVAE: [reconstruction, kld, gradient_guided, edge_matching]
         if lambda_weights is None:
-            lambda_weights = [1.0, args.dataset_size / args.batch_size, 1.0, 1.0]
+            lambda_weights = [1.0, args.batch_size / args.dataset_size, 1.0, 1.0]
         else:
-            lambda_weights[1] = args.dataset_size / args.batch_size
+            lambda_weights[1] = args.batch_size / args.dataset_size
         return GGVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'vq_vae':
         # Default lambda_weights for VQVAE: [reconstruction, commitment, embedding]
@@ -151,9 +151,9 @@ def get_network(input_size, num_channels=3, args=None, device=None):
     elif arch.lower() == 'betatc_vae' or arch.lower() == 'btc_vae':
         # Default lambda_weights for BetaTCVAE: [reconstruction, mi, tc, kld]
         if lambda_weights is None:
-            lambda_weights = [1.0, 1.0, 1.0, args.dataset_size / args.batch_size]
+            lambda_weights = [1.0, 1.0, 1.0, args.batch_size / args.dataset_size]
         else:
-            lambda_weights[3] = args.dataset_size / args.batch_size
+            lambda_weights[3] = args.batch_size / args.dataset_size
         return BetaTCVAE(
             in_channels=num_channels,
             latent_dim=latent_dim,

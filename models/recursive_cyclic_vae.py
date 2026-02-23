@@ -53,8 +53,24 @@ Loss weights
     - Both regularization terms start equal; tune lambda_cycle up if generated
       images lack diversity, or tune lambda_recursive_kld down if reconstructions
       remain blurry.
-    - Recursive KL can have noisy gradients early in training (when reconstruction
-      is poor), so keep lambda_recursive_kld ≤ lambda_recon × 1e-3 initially.
+
+KL Annealing
+------------
+  recursive_kld is adversarial in early training: when reconstruction is poor,
+  enc(recons) produces a large, arbitrary μ̂ that drives a large mode-averaging
+  gradient into the decoder before it has learned basic reconstruction.
+
+  Annealing ramps the recursive_kld weight from 0 → λ_recursive_kld linearly
+  over the first `recursive_kld_anneal_steps` gradient steps:
+
+      anneal_rate(t) = min(t / anneal_steps, 1.0)
+      effective_weight(t) = λ_recursive_kld × anneal_rate(t)
+
+  During evaluation (model.eval()) anneal_rate is fixed at 1.0 so that logged
+  validation metrics reflect the full-weight objective.
+
+    Config parameter: recursive_kld_anneal_steps (default: 25000)
+    ≈ 10 epochs for CelebA with batch_size=64 (~2500 steps/epoch).
 
 Forward pass
 ------------
@@ -79,17 +95,24 @@ def _cycle_loss(z_prior: torch.Tensor, mu_gen: torch.Tensor) -> torch.Tensor:
 class RecursiveCyclicVAE(VAE):
     """
     Recursive Cyclic VAE: three-objective model combining reconstruction,
-    recursive KL regularization, and latent cycle consistency.
+    recursive KL regularization (with linear annealing), and latent cycle
+    consistency.
 
     loss_weights: [lambda_recon, lambda_recursive_kld, lambda_cycle]
+    recursive_kld_anneal_steps: int  — gradient steps to ramp recursive KL
+                                       from 0 to its full weight (default 10000)
     """
 
-    def __init__(self, **kwargs):
+    num_iter = 0  # global step counter, matches BetaTCVAE convention
+
+    def __init__(self, recursive_kld_anneal_steps: int = 25000, **kwargs):
         lambda_weights = kwargs.get("lambda_weights", [1.0, 0.00025, 0.00025])
         if isinstance(lambda_weights, list) and len(lambda_weights) >= 3:
             # Pass [recon, 0] to base VAE — we own all KL bookkeeping here.
             kwargs = {**kwargs, "lambda_weights": [lambda_weights[0], 0.0]}
         super().__init__(**kwargs)
+
+        self.anneal_steps = recursive_kld_anneal_steps
 
         # All three objectives share encoder+decoder — no clean task-specific
         # head split.  Use backward() (not mtl_backward()) so Jacobians are
@@ -159,8 +182,17 @@ class RecursiveCyclicVAE(VAE):
         lambda_rec_kl = self.lambda_weights["recursive_kld_loss"]
         lambda_cycle = self.lambda_weights["cycle_loss"]
 
+        # Linear annealing for recursive KL: 0 → λ_rec_kl over anneal_steps.
+        # Prevents the adversarial early-training gradient when recons is poor.
+        # anneal_rate = 1.0 during eval so validation metrics use full weight.
+        if self.training:
+            RecursiveCyclicVAE.num_iter += 1
+            anneal_rate = min(RecursiveCyclicVAE.num_iter / self.anneal_steps, 1.0)
+        else:
+            anneal_rate = 1.0
+
         weighted_recon_loss = lambda_recon * recon_loss
-        weighted_recursive_kld = lambda_rec_kl * recursive_kld
+        weighted_recursive_kld = anneal_rate * lambda_rec_kl * recursive_kld
         weighted_cycle_loss = lambda_cycle * cycle
 
         total_loss = weighted_recon_loss + weighted_recursive_kld + weighted_cycle_loss

@@ -1,4 +1,4 @@
-# CelebA Recursive Cyclic VAE - 100ep 64bs - COMFORT (MGDA + UPGrad, beta schedule) (seed 999)
+# CelebA Recursive Cyclic VAE - COMFORT (MGDA + UPGrad, beta schedule) (seed 999)
 dataset: CelebA
 data_dir: ../data
 normalize: false
@@ -24,6 +24,7 @@ comfort_beta_k: 1.0
 comfort_beta_a: 1.0
 comfort_beta_l: 0.01
 comfort_beta_u: 1.0
+recursive_kld_anneal_steps: 25000
 seed: 999
 save_path: logs/
 save_freq: 10
@@ -33,5 +34,5 @@ hv_ref: [1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba rc_vae 100ep 64bs lr1e-3 wd1e-5 comfort seed999
-wandb_group: celeba rc_vae 100ep 64bs lr1e-3 wd1e-5 comfort
+wandb_name: celeba rc_vae comfort ann25k lr1e-3 wd1e-5 seed999
+wandb_group: celeba rc_vae comfort ann25k lr1e-3 wd1e-5

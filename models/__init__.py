@@ -122,7 +122,15 @@ def get_network(input_size, num_channels=3, args=None, device=None):
             lambda_weights = [1.0, args.batch_size / args.dataset_size, 1.0, 1.0]
         else:
             lambda_weights[1] = args.batch_size / args.dataset_size
-        return GGVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+        return GGVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device, edge_matching_version=1)
+    elif arch.lower() in ('gg_vae_v2', 'gg_vae_v3', 'gg_vae_v4', 'gg_vae_v5', 'gg_vae_v6'):
+        # GGVAE with different edge_matching_loss versions (v2=norm L1, v3=angle, v4=masked, v5=cosine, v6=binary BCE)
+        version = int(arch.lower().split('_')[-1].replace('v', ''))
+        if lambda_weights is None:
+            lambda_weights = [1.0, args.batch_size / args.dataset_size, 1.0, 1.0]
+        else:
+            lambda_weights[1] = args.batch_size / args.dataset_size
+        return GGVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device, edge_matching_version=version)
     elif arch.lower() == 'vq_vae':
         # Default lambda_weights for VQVAE: [reconstruction, commitment, embedding]
         if lambda_weights is None:

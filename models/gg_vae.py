@@ -26,6 +26,7 @@ class GGVAE(VAE):
                  recons_reduction="mean", 
                  lambda_weights=None, 
                  device=None, 
+                 edge_matching_version=1,
                  **kwargs):
         # Initialize parent VAE class
         super(GGVAE, self).__init__(
@@ -55,9 +56,17 @@ class GGVAE(VAE):
         self.register_buffer('sobel_y', sobel_y.expand(3, 1, 3, 3))
 
         # Update objectives dictionary to include gradient-guided and edge matching losses
-        self.objectives = {"reconstruction_loss": self.recon_obj, "kld_loss": self.kld_obj, 
-                          "gradient_guided_loss": self.edge_weighted_pixel_loss, 
-                          "edge_matching_loss": self.edge_matching_loss}
+        edge_matching_fn = {
+            1: self.edge_matching_loss,
+            2: self.edge_matching_loss_v2,
+            3: self.edge_matching_loss_v3,
+            4: self.edge_matching_loss_v4,
+            5: self.edge_matching_loss_v5,
+            6: self.edge_matching_loss_v6s,
+        }.get(edge_matching_version, self.edge_matching_loss)
+        self.objectives = {"reconstruction_loss": self.recon_obj, "kld_loss": self.kld_obj,
+                          "gradient_guided_loss": self.edge_weighted_pixel_loss,
+                          "edge_matching_loss": edge_matching_fn}
 
         # lambda_weights: dictionary matching self.objectives keys
         # Accepts either dict or list (for backward compatibility)
@@ -145,6 +154,87 @@ class GGVAE(VAE):
         grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
 
         edge_match_loss = F.l1_loss(grad_pred, grad_target)
+        
+        return edge_match_loss
+
+    def edge_matching_loss_v2(self, inputs, recons):
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
+        
+        # Normalize to handle scale differences from sigmoid
+        grad_target_norm = grad_target / (grad_target.max() + EPS)
+        grad_pred_norm = grad_pred / (grad_pred.max() + EPS)
+        
+        edge_match_loss = F.l1_loss(grad_pred_norm, grad_target_norm)
+        return edge_match_loss
+
+
+    def edge_matching_loss_v3(self, inputs, recons):
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Use Gradient Direction Instead of Magnitude
+        # Compute edge directions (angles)
+        grad_target_angle = torch.atan2(input_y, input_x)
+        grad_pred_angle = torch.atan2(recon_y, recon_x)
+
+        edge_match_loss = F.l1_loss(grad_pred_angle, grad_target_angle)
+        return edge_match_loss
+
+    def edge_matching_loss_v4(self, inputs, recons):
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        # Compute gradient magnitudes
+        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
+        # Only penalize where edges are actually significant
+        edge_threshold = grad_target.mean()
+        mask = (grad_target > edge_threshold).float()
+        edge_match_loss = F.l1_loss(grad_pred * mask, grad_target * mask)
+        return edge_match_loss
+
+    def edge_matching_loss_v5(self, inputs, recons):
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        grad_target = torch.stack([input_x, input_y], dim=1)  # (B, 2, H, W)
+        grad_pred = torch.stack([recon_x, recon_y], dim=1)
+        
+        # Normalize to unit vectors
+        grad_target = F.normalize(grad_target, p=2, dim=1)
+        grad_pred = F.normalize(grad_pred, p=2, dim=1)
+        
+        # Cosine similarity: measures *direction* not magnitude
+        edge_match_loss = 1 - F.cosine_similarity(grad_pred, grad_target).mean()
+        
+        return edge_match_loss
+
+    def edge_matching_loss_v6s(self, inputs, recons):
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Threshold to get edge maps (binary)
+        target_edges = (torch.sqrt(input_x**2 + input_y**2 + EPS) > 0.5).float()
+        pred_edges = (torch.sqrt(recon_x**2 + recon_y**2 + EPS) > 0.5).float()
+        
+        # BCE on edge presence, not magnitude
+        edge_match_loss = F.binary_cross_entropy(pred_edges, target_edges)
         
         return edge_match_loss
 

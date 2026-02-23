@@ -1,8 +1,8 @@
+configs/celeba/psr_vae_lr1e-3/mgda_ln/bce.yaml
 configs/celeba/psr_vae_lr1e-3/upgrad/bce.yaml
 configs/celeba/psr_vae_lr1e-3/sum/bce.yaml
 configs/celeba/psr_vae_lr1e-3/aligned_mtl/bce.yaml
 configs/celeba/psr_vae_lr1e-3/aligned_mtl_median/bce.yaml
-configs/celeba/psr_vae_lr1e-3/mgda_ln/bce.yaml
 configs/celeba/psr_vae_lr1e-3/mgda_gn/bce.yaml
 configs/celeba/psr_vae_lr1e-3/mgda_lgn/bce.yaml
 configs/celeba/psr_vae_lr1e-3/comfort/bce.yaml

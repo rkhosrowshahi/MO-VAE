@@ -153,7 +153,8 @@ class GGVAE(VAE):
         grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
         grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
 
-        edge_match_loss = F.smooth_l1_loss(grad_pred, grad_target)
+        # edge_match_loss = F.smooth_l1_loss(grad_pred, grad_target)
+        edge_match_loss = F.mse_loss(grad_pred, grad_target)
         
         return edge_match_loss
 

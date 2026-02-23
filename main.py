@@ -13,20 +13,20 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+    PCGrad,
 from torchjd.autojac import backward, mtl_backward
 from torchjd.aggregation import (
-    UPGrad,
-    PCGrad,
-    Mean,
     # AlignedMTL,
     NashMTL,
     IMTLG,
     # MGDA,
     CAGrad,
     DualProj,
+    UPGrad,
+    Mean,
     Sum
 )
-from utils.jd import NUPGrad, PNUPGrad, AlignedMTL, MGDA, COMFORT
+from utils.jd import PNUPGrad, AlignedMTL, MGDA, COMFORT
 
 import wandb
 from pymoo.indicators.hv import HV

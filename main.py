@@ -878,6 +878,14 @@ def main(args):
     device = torch.device(args.device)
 
     train_dataset, test_dataset, input_size = get_dataset(args.dataset, data_dir=args.data_dir, normalize=args.normalize)
+    # Most models in this repo use `tanh` outputs for gaussian/laplacian losses, which assumes inputs are normalized to [-1, 1].
+    # If `--normalize` is off, datasets are in [0, 1] and training will silently suffer.
+    if (not args.normalize) and getattr(args, "recons_dist", None) in {"gaussian", "laplacian"}:
+        tqdm.write(
+            "Warning: `normalize=false` with `recons_dist` in {gaussian, laplacian}. "
+            "Your data will be in [0,1] but many decoders output tanh in [-1,1]. "
+            "Consider enabling `--normalize` (mean=0.5, std=0.5) for stable training."
+        )
 
     train_loader = DataLoader(
         train_dataset,
@@ -1313,6 +1321,21 @@ if __name__ == "__main__":
     parser.add_argument("--embedding_dim", type=int, default=None)
     parser.add_argument("--num_embeddings", type=int, default=None)
     parser.add_argument("--anneal_steps", type=int, default=None)
+    # Sphere Encoder (arXiv:2602.15030) optional args
+    parser.add_argument("--sigma_max_angle_deg", type=float, default=80.0, help="Sphere encoder: max noise angle in degrees (paper: 80 for 32x32, 85 for 256x256)")
+    parser.add_argument("--sigma_mix_prob", type=float, default=0.0, help="Sphere encoder: probability to sample alpha from a higher-angle mix band (paper: 0.1)")
+    parser.add_argument("--sigma_mix_angle_min_deg", type=float, default=None, help="Sphere encoder: mix band min angle in degrees (e.g., 80)")
+    parser.add_argument("--sigma_mix_angle_max_deg", type=float, default=None, help="Sphere encoder: mix band max angle in degrees (e.g., 85)")
+    parser.add_argument("--lambda_pix_recon", type=float, default=1.0, help="Sphere encoder: weight for pixel reconstruction loss")
+    parser.add_argument("--lambda_pix_con", type=float, default=0.5, help="Sphere encoder: weight for pixel consistency loss")
+    parser.add_argument("--lambda_lat_con", type=float, default=0.1, help="Sphere encoder: weight for latent consistency loss")
+    # Sphere Encoder ViT (paper architecture)
+    parser.add_argument("--patch_size", type=int, default=None, help="ViT patch size (default: 2 for img_size<=32, 8 else)")
+    parser.add_argument("--vit_embed_dim", type=int, default=1024, help="Sphere encoder ViT: transformer embed dim")
+    parser.add_argument("--vit_depth", type=int, default=24, help="Sphere encoder ViT: num transformer blocks")
+    parser.add_argument("--vit_num_heads", type=int, default=16, help="Sphere encoder ViT: num attention heads")
+    parser.add_argument("--vit_mixer_depth", type=int, default=2, help="Sphere encoder ViT: MLP-Mixer depth (2 CIFAR, 4 large img)")
+    parser.add_argument("--num_classes", type=int, default=0, help="Num classes for conditional generation (0 = unconditional)")
     parser.add_argument("--hv_ref", type=float, nargs="+", default=[1.1, 1.1])
     parser.add_argument("--num_samples", type=int, default=64)
     parser.add_argument("--save_freq", type=int, default=10)

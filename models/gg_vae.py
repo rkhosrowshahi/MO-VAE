@@ -171,7 +171,7 @@ class GGVAE(VAE):
         grad_target_norm = grad_target / (grad_target.max() + EPS)
         grad_pred_norm = grad_pred / (grad_pred.max() + EPS)
         
-        edge_match_loss = F.l1_loss(grad_pred_norm, grad_target_norm)
+        edge_match_loss = F.smooth_l1_loss(grad_pred_norm, grad_target_norm)
         return edge_match_loss
 
 
@@ -187,7 +187,7 @@ class GGVAE(VAE):
         grad_target_angle = torch.atan2(input_y, input_x)
         grad_pred_angle = torch.atan2(recon_y, recon_x)
 
-        edge_match_loss = F.l1_loss(grad_pred_angle, grad_target_angle)
+        edge_match_loss = F.smooth_l1_loss(grad_pred_angle, grad_target_angle)
         return edge_match_loss
 
     def edge_matching_loss_v4(self, inputs, recons):
@@ -202,7 +202,7 @@ class GGVAE(VAE):
         # Only penalize where edges are actually significant
         edge_threshold = grad_target.mean()
         mask = (grad_target > edge_threshold).float()
-        edge_match_loss = F.l1_loss(grad_pred * mask, grad_target * mask)
+        edge_match_loss = F.smooth_l1_loss(grad_pred * mask, grad_target * mask)
         return edge_match_loss
 
     def edge_matching_loss_v5(self, inputs, recons):

@@ -1,4 +1,4 @@
-# CelebA Recursive Cyclic VAE - 100ep 64bs - Aligned MTL (median scale)
+# CelebA Recursive Cyclic VAE - Aligned MTL (median scale)
 dataset: CelebA
 data_dir: ../data
 normalize: false
@@ -16,6 +16,7 @@ wd: 1e-5
 scheduler: exponential
 scheduler_gamma: 0.95
 aggregator: aligned_mtl_median
+recursive_kld_anneal_steps: 25000
 seed: 42
 save_path: logs/
 save_freq: 10
@@ -25,5 +26,5 @@ hv_ref: [1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba rc_vae 100ep 64bs lr1e-3 wd1e-5 aligned_mtl_median seed42
-wandb_group: celeba rc_vae 100ep 64bs lr1e-3 wd1e-5 aligned_mtl_median
+wandb_name: celeba rc_vae aligned_mtl_median ann25k lr1e-3 wd1e-5 seed42
+wandb_group: celeba rc_vae aligned_mtl_median ann25k lr1e-3 wd1e-5

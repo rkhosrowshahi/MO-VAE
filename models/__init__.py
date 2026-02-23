@@ -51,7 +51,8 @@ def get_network(input_size, num_channels=3, args=None, device=None):
         # Recursive Cyclic VAE: [reconstruction, recursive_kld, cycle]
         if lambda_weights is None:
             lambda_weights = [1.0, 0.00025, 0.00025]
-        return RecursiveCyclicVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
+        recursive_kld_anneal_steps = getattr(args, 'recursive_kld_anneal_steps', 25000)
+        return RecursiveCyclicVAE(latent_dim=latent_dim, hidden_dims=hidden_dims, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, recursive_kld_anneal_steps=recursive_kld_anneal_steps, device=device)
     elif arch.lower() == 'sphere_encoder':
         # Sphere Encoder (arXiv:2602.15030): spherical latent, pix_recon + pix_con + lat_con
         # lambda_weights unused; use model kwargs for sigma_max_angle_deg, lambda_* if needed

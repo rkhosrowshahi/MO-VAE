@@ -26,7 +26,7 @@ seed: 42
 save_path: logs/
 save_freq: 10
 eval_freq: 10
-num_samples: 64
+num_samples: 9
 # Hypervolume reference points (GG-VQ-VAE v2 has 4 objectives: reconstruction_loss, embedding_loss, commitment_loss, gradient_guided_loss)
 hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 # Wandb settings

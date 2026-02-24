@@ -1025,7 +1025,7 @@ def main(args):
     #     + ", ".join(f"{key}: {meter.avg:.6e}" for key, meter in eval_loss_meters.items())
     # )
 
-    if hasattr(net, "print_model_summary"):
+    if hasattr(net, "print_model_summary") and args.device.endswith("0"):
         print(net.print_model_summary())
 
     objective_keys = net.objectives.keys()

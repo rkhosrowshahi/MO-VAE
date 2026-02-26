@@ -11,7 +11,7 @@ recons_reduction: mean
 epochs: 1000
 batch_size: 128
 optimizer: adamw
-lr: 0.001
+lr: 1e-4
 wd: 0.0
 scheduler: cosine
 scheduler_lr_min: 1e-6

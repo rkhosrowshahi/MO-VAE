@@ -2,7 +2,7 @@ import os
 import numpy as np
 import torch
 from torchvision import datasets, transforms
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 from torch.utils.data import Dataset
 
 
@@ -145,8 +145,8 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
     """
     Load and prepare a dataset for training/evaluation.
     
-    Supports CIFAR-10, CIFAR-100, ImageNet, and CelebA datasets. Applies appropriate
-    transforms including data augmentation for training sets and optional normalization.
+    Supports CIFAR-10, CIFAR-100, ImageNet, CelebA, Oxford Flowers-102, and AFHQ (animal faces) datasets.
+    Applies appropriate transforms including data augmentation for training sets and optional normalization.
     
     Args:
         dataset_name: Name of the dataset. Supported values:
@@ -154,6 +154,8 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
                      - 'CIFAR100': CIFAR-100 dataset (32x32 images, 100 classes)
                      - 'ImageNet': ImageNet dataset (224x224 images, 1000 classes)
                      - 'CelebA': CelebA face dataset (64x64 images)
+                     - 'Oxford-Flower-102': Oxford Flower 102 (train+test as train, validation as test)
+                     - 'animal-face' or 'afhq': AFHQ animal faces (train only; same data used for train and test)
         data_dir: Root directory where datasets are stored or will be downloaded.
                  Default is './data'.
         normalize: If True, applies normalization transforms using dataset-specific
@@ -393,6 +395,55 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
 
         train_dataset = HFImageDataset(train_dataset, transform=train_transforms)
         test_dataset  = HFImageDataset(test_dataset,  transform=test_transforms)
+    elif dataset_name.lower() in ("oxford-flower-102"):
+        # Oxford Flower 102: train(1,020)+validation(1,020) as training with size = 2,040, test(6,149) as test with size = 6,149
+        input_size = 256
+        mean = (0.5, 0.5, 0.5)
+        std = (0.5, 0.5, 0.5)
+        train_transforms = [
+            transforms.RandomHorizontalFlip(),
+            transforms.CenterCrop(input_size),
+            transforms.ToTensor(),
+        ]
+        test_transforms = [
+            transforms.CenterCrop(input_size),
+            transforms.ToTensor(),
+        ]
+        if normalize:
+            train_transforms.append(transforms.Normalize(mean, std))
+            test_transforms.append(transforms.Normalize(mean, std))
+        train_transforms = transforms.Compose(train_transforms)
+        test_transforms = transforms.Compose(test_transforms)
+
+        ds = load_dataset("Donghyun99/Oxford-Flower-102")
+        train_plus_test = concatenate_datasets([ds["train"], ds["validation"]])
+        train_dataset = HFImageDataset(train_plus_test, transform=train_transforms)
+        test_dataset = HFImageDataset(ds["test"], transform=test_transforms)
+    elif dataset_name.lower() in ("animal-face", "afhq"):
+        # AFHQ (Animal Faces HQ): only train split with size = 16,130 images; use same data for both train and test
+        input_size = 256
+        mean = (0.5, 0.5, 0.5)
+        std = (0.5, 0.5, 0.5)
+        train_transforms = [
+            transforms.Resize(input_size),
+            transforms.RandomHorizontalFlip(),
+            transforms.CenterCrop(input_size),
+            transforms.ToTensor(),
+        ]
+        test_transforms = [
+            transforms.Resize(input_size),
+            transforms.CenterCrop(input_size),
+            transforms.ToTensor(),
+        ]
+        if normalize:
+            train_transforms.append(transforms.Normalize(mean, std))
+            test_transforms.append(transforms.Normalize(mean, std))
+        train_transforms = transforms.Compose(train_transforms)
+        test_transforms = transforms.Compose(test_transforms)
+
+        ds = load_dataset("huggan/AFHQ", split="train")
+        train_dataset = HFImageDataset(ds, transform=train_transforms)
+        test_dataset = HFImageDataset(ds, transform=test_transforms)
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 

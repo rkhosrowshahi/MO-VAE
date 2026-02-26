@@ -1,1 +1,5 @@
 configs/imagenet/gg_vq_vae_v3/upgrad/config.yaml
+configs/imagenet/gg_vq_vae_v3/amtl_median/bce.yaml
+configs/imagenet/gg_vq_vae_v3/mgda_gn/bce.yaml
+configs/imagenet/gg_vq_vae_v3/mgda_lgn/bce.yaml
+configs/imagenet/gg_vq_vae_v3/mgda_ln/bce.yaml

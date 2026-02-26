@@ -1,4 +1,5 @@
-configs/celeba-hq/gg_vq_vae_v3/upgrad/config_1.yaml
-configs/celeba-hq/gg_vq_vae_v3/sum/config_1.yaml
-configs/celeba-hq/gg_vq_vae_v3/upgrad/config_2.yaml
-configs/celeba-hq/gg_vq_vae_v3/sum/config_2.yaml
+configs/celeba-hq/gg_vq_vae_v3/amtl_median/bce.yaml
+configs/celeba-hq/gg_vq_vae_v3/mgda_gn/bce.yaml
+configs/celeba-hq/gg_vq_vae_v3/mgda_lgn/bce.yaml
+configs/celeba-hq/gg_vq_vae_v3/mgda_ln/bce.yaml
+configs/celeba-hq/gg_vq_vae_v3/amtl_min/bce.yaml

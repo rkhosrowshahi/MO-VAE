@@ -1,6 +1,0 @@
-configs/celeba-hq/vae/mgda/config_seed123.yaml
-configs/celeba-hq/vae/mgda_ln/config_seed123.yaml
-configs/celeba-hq/vae/mgda_gn/config_seed123.yaml
-configs/celeba-hq/vae/mgda_lgn/config_seed123.yaml
-configs/celeba-hq/vae/sum/config_seed123.yaml
-configs/celeba-hq/vae/upgrad/config_seed123.yaml

@@ -1,4 +1,4 @@
-# ImageNet VQ-VAE Configuration - Sum Aggregator (BCE)
+# ImageNet GG-VQ-VAE Configuration - Sum Aggregator (BCE)
 # This configuration trains a VQ-VAE on ImageNet dataset with BCE mean objectives
 
 
@@ -7,11 +7,11 @@ dataset: imagenet
 data_dir: ../data/imagenet
 normalize: false
 # Model architecture
-arch: vq_vae
+arch: gg_vq_vae_v3
 embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
-loss_weights: [1.0, 1.0, 0.25]
+loss_weights: [1.0, 1.0, 0.25, 1.0, 1.0]
 recons_dist: bernoulli
 recons_reduction: mean
 # Training settings
@@ -30,11 +30,11 @@ save_freq: 1
 eval_freq: 1
 num_samples: 4
 # Hypervolume reference points (VQ-VAE has 3 objectives: reconstruction_loss, embedding_loss, commitment_loss)
-hv_ref: [1.1, 1.1, 1.1]
+hv_ref: [1.1, 1.1, 1.1, 1.1, 1.1]
 # Wandb settings
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: imagenet-vq_vae-512k-64d-sum-seed42
-wandb_group: imagenet-vq_vae-512k-64d-sum
+wandb_name: imagenet-gg_vq_vae_v3-512k-64d-sum-seed42
+wandb_group: imagenet-gg_vq_vae_v3-512k-64d-sum
 

@@ -1,1 +1,8 @@
-.\configs\celeba\gg_vae\upgrad\bce.yaml
+configs/imagenet/gg_vae/sum/config.yaml
+configs/imagenet/gg_vae/mgda_ln/config.yaml
+configs/imagenet/gg_vae/mgda_gn/config.yaml
+configs/imagenet/gg_vae/mgda_lgn/config.yaml
+configs/imagenet/gg_vae/amtl_median/config.yaml
+configs/imagenet/gg_vae/amtl/config.yaml
+configs/imagenet/gg_vae/upgrad/config.yaml
+

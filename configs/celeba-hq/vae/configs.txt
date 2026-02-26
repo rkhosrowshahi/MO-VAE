@@ -1,6 +1,8 @@
-configs/celeba-hq/vae/mgda/config.yaml
+configs/celeba-hq/vae/sum/config.yaml
 configs/celeba-hq/vae/mgda_ln/config.yaml
 configs/celeba-hq/vae/mgda_gn/config.yaml
 configs/celeba-hq/vae/mgda_lgn/config.yaml
-configs/celeba-hq/vae/sum/config.yaml
+configs/celeba-hq/vae/amtl_median/config.yaml
+configs/celeba-hq/vae/amtl/config.yaml
 configs/celeba-hq/vae/upgrad/config.yaml
+

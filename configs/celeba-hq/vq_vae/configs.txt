@@ -1,4 +1,7 @@
-configs/celeba-hq/vq_vae/amtl_median/bce.yaml
-configs/celeba-hq/vq_vae/mgda_gn/bce.yaml
-configs/celeba-hq/vq_vae/mgda_lgn/bce.yaml
-configs/celeba-hq/vq_vae/mgda_ln/bce.yaml
+configs/celeba-hq/vq_vae/sum/config.yaml
+configs/celeba-hq/vq_vae/amtl_median/config.yaml
+configs/celeba-hq/vq_vae/mgda_gn/config.yaml
+configs/celeba-hq/vq_vae/mgda_lgn/config.yaml
+configs/celeba-hq/vq_vae/mgda_ln/config.yaml
+configs/celeba-hq/vq_vae/upgrad/config.yaml
+configs/celeba-hq/vq_vae/amtl/config.yaml

@@ -1,1 +1,8 @@
-.\configs\celeba\gg_vae\upgrad\bce.yaml
+configs/celeba-hq/gg_vae/sum/config.yaml
+configs/celeba-hq/gg_vae/mgda_ln/config.yaml
+configs/celeba-hq/gg_vae/mgda_gn/config.yaml
+configs/celeba-hq/gg_vae/mgda_lgn/config.yaml
+configs/celeba-hq/gg_vae/amtl_median/config.yaml
+configs/celeba-hq/gg_vae/amtl/config.yaml
+configs/celeba-hq/gg_vae/upgrad/config.yaml
+

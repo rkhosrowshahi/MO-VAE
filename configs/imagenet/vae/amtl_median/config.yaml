@@ -25,8 +25,8 @@ aggregator: aligned_mtl_median
 seed: 42
 # Logging settings
 save_path: logs/
-save_freq: 1
-eval_freq: 1
+save_freq: 10
+eval_freq: 10
 num_samples: 4
 # Hypervolume reference points (VAE has 2 objectives: reconstruction_loss, kl_loss)
 hv_ref: [1.1, 1.1]

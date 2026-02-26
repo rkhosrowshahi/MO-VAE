@@ -3,13 +3,13 @@ dataset: oxford-flower-102
 data_dir: ../data
 normalize: false
 arch: vae
-latent_dim: 128
+latent_dim: 4096
 hidden_dims: [32, 64, 128, 256, 512]
 loss_weights: [1.0, 0.1255]
 recons_dist: bernoulli
 recons_reduction: mean
 epochs: 1000
-batch_size: 256
+batch_size: 128
 optimizer: adamw
 lr: 0.001
 wd: 0.0

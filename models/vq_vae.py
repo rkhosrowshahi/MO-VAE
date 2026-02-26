@@ -216,7 +216,7 @@ class VQVAE(nn.Module):
             raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
         self.recon_obj = recon_obj
 
-        self.objectives = {"reconstruction_loss": recon_obj, "commitment_loss": None, "embedding_loss": None}
+        self.objectives = {"reconstruction_loss": recon_obj, "embedding_loss": None, "commitment_loss": None}
 
         self.features = ["encoding"]
 

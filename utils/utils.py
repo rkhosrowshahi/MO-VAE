@@ -235,32 +235,6 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
         input_size = 256
-        
-        # train_transforms = [
-        #     transforms.RandomResizedCrop(256),
-        #     transforms.RandomHorizontalFlip(),
-        #     transforms.ToTensor(),
-        # ]
-        
-        # test_transforms = [
-        #     transforms.Resize(256),
-        #     transforms.CenterCrop(256),
-        #     transforms.ToTensor(),
-        # ]
-
-        # if normalize:
-        #     train_transforms.append(transforms.Normalize(mean, std))
-        #     test_transforms.append(transforms.Normalize(mean, std))
-
-        # train_transforms = transforms.Compose(train_transforms)
-        # test_transforms = transforms.Compose(test_transforms)
-        
-        # train_dataset = datasets.ImageNet(
-        #     root=data_dir, split='train', transform=transform_train
-        # )
-        # test_dataset = datasets.ImageNet(
-        #     root=data_dir, split='val', transform=transform_test
-        # )
 
         train_dataset = load_dataset("benjamin-paine/imagenet-1k-256x256", split="train")
         test_dataset = load_dataset("benjamin-paine/imagenet-1k-256x256", split="test")
@@ -281,29 +255,24 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         train_transforms = transforms.Compose(train_transforms)
         test_transforms = transforms.Compose(test_transforms)
 
-        # def train_transform_example(examples):
-        #     images = [train_transforms(img.convert("RGB")) for img in examples["image"]]
-        #     return {"image": images, "labels": examples["label"]}
-
-        # def test_transform_example(examples):
-        #     images = [test_transforms(img.convert("RGB")) for img in examples["image"]]
-        #     return {"image": images, "labels": examples["label"]}
-
         train_dataset = HFImageDataset(train_dataset, transform=train_transforms)
         test_dataset  = HFImageDataset(test_dataset,  transform=test_transforms)
     elif dataset_name.lower() == "celeba":
         input_size = 64
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
-        train_transforms = [transforms.RandomHorizontalFlip(),
-                                              transforms.CenterCrop(148),
-                                              transforms.Resize(input_size),
-                                              transforms.ToTensor(),]
+        train_transforms = [
+            transforms.CenterCrop(148),
+            transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.ToTensor()
+        ]
         
         val_transforms = [
-                                            transforms.CenterCrop(148),
-                                            transforms.Resize(input_size),
-                                            transforms.ToTensor(),]
+            transforms.CenterCrop(148),
+            transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
+            transforms.ToTensor()
+        ]
 
         if normalize:
             train_transforms.append(transforms.Normalize(mean, std))
@@ -333,15 +302,15 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
         train_transforms = [
-            transforms.RandomHorizontalFlip(),
             transforms.CenterCrop(178),
-            transforms.Resize(input_size),
+            transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
+            transforms.RandomHorizontalFlip(p=0.5),
             transforms.ToTensor()
         ]
         
         val_transforms = [
             transforms.CenterCrop(178),
-            transforms.Resize(input_size),
+            transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
             transforms.ToTensor()
         ]
 
@@ -374,7 +343,7 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
         train_transforms = [
-            # transforms.RandomHorizontalFlip(),
+            transforms.RandomHorizontalFlip(p=0.5),
             transforms.ToTensor()
         ]
         
@@ -401,11 +370,18 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
         train_transforms = [
-            transforms.RandomHorizontalFlip(),
-            transforms.CenterCrop(input_size),
+            transforms.RandomResizedCrop(
+                size=256,
+                scale=(0.7, 1.0),         # slightly looser than ImageNet's 0.08-1.0 to avoid too much loss of flower detail
+                ratio=(3.0/4.0, 4.0/3.0),
+                interpolation=transforms.InterpolationMode.BICUBIC,
+                antialias=True
+            ),
+            transforms.RandomHorizontalFlip(p=0.5), 
             transforms.ToTensor(),
         ]
         test_transforms = [
+            transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
             transforms.CenterCrop(input_size),
             transforms.ToTensor(),
         ]
@@ -425,14 +401,14 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
         train_transforms = [
-            transforms.Resize(input_size),
+            transforms.CenterCrop(178),
+            transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
             transforms.RandomHorizontalFlip(),
-            transforms.CenterCrop(input_size),
             transforms.ToTensor(),
         ]
         test_transforms = [
-            transforms.Resize(input_size),
-            transforms.CenterCrop(input_size),
+            transforms.CenterCrop(178),
+            transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
             transforms.ToTensor(),
         ]
         if normalize:

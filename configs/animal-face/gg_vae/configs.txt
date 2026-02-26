@@ -1,7 +1,7 @@
+configs/animal-face/gg_vae/sum/bce.yaml
 configs/animal-face/gg_vae/mgda_ln/bce.yaml
 configs/animal-face/gg_vae/mgda_gn/bce.yaml
 configs/animal-face/gg_vae/mgda_lgn/bce.yaml
-configs/animal-face/gg_vae/sum/bce.yaml
 configs/animal-face/gg_vae/upgrad/bce.yaml
 configs/animal-face/gg_vae/aligned_mtl_median/bce.yaml
 configs/animal-face/gg_vae/aligned_mtl/bce.yaml

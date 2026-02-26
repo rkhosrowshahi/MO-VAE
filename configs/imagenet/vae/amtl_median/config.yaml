@@ -1,4 +1,4 @@
-# ImageNet VAE Configuration - MGDA LGN Aggregator (BCE + KLD)
+# ImageNet VAE Configuration - Aligned MTL Median Aggregator (BCE + KLD)
 # This configuration trains a VAE on ImageNet dataset with BCE mean and KL objectives
 
 
@@ -21,9 +21,7 @@ lr: 1e-4
 wd: 0
 scheduler: cosine
 scheduler_lr_min: 1e-6
-aggregator: mgda_lgn
-mgda_epsilon: 1e-5
-mgda_max_iters: 250
+aggregator: aligned_mtl_median
 seed: 42
 # Logging settings
 save_path: logs/
@@ -36,6 +34,6 @@ hv_ref: [1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: imagenet-vae-4096d-1.0e-4*kld-mgda_lgn-seed42
-wandb_group: imagenet-vae-4096d-1.0e-4*kld-mgda_lgn
+wandb_name: imagenet-vae-4096d-1.0e-4*kld-amtl_median-seed42
+wandb_group: imagenet-vae-4096d-1.0e-4*kld-amtl_median
 

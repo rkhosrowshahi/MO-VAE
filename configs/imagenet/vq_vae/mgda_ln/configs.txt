@@ -1,0 +1,3 @@
+configs/imagenet/vq_vae/mgda/config.yaml
+configs/imagenet/vq_vae/mgda/config_seed123.yaml
+configs/imagenet/vq_vae/mgda/config_seed999.yaml

@@ -1,7 +1,7 @@
+configs/oxford-flower-102/vq_vae/sum/bce.yaml
 configs/oxford-flower-102/vq_vae/mgda_ln/bce.yaml
 configs/oxford-flower-102/vq_vae/mgda_gn/bce.yaml
 configs/oxford-flower-102/vq_vae/mgda_lgn/bce.yaml
-configs/oxford-flower-102/vq_vae/sum/bce.yaml
 configs/oxford-flower-102/vq_vae/upgrad/bce.yaml
 configs/oxford-flower-102/vq_vae/aligned_mtl_median/bce.yaml
 configs/oxford-flower-102/vq_vae/aligned_mtl/bce.yaml

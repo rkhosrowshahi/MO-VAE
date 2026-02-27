@@ -6,9 +6,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torchsummary import summary
 
-from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled
-from utils.objectives import bce_with_logits_per_image_sum, bce_with_logits_per_pixel_mean
-from utils.objectives import laplacian_per_image_sum, laplacian_per_pixel_mean
+from utils.objectives import get_recon_obj_and_activation
 from models.vq_vae import VectorQuantizer
 
 
@@ -118,9 +116,8 @@ class VQVAE2(nn.Module):
                  num_residual_layers: int = 2,
                  input_size: int = 64,
                  layer_norm: str = "none",
-                 output_activation: str = "tanh",
-                 recons_dist: str = "gaussian",
-                 recons_reduction: str = "mean",
+                 recons_activation: str = "tanh",
+                 recons_objective: str = "mse",
                  lambda_weights: Optional[List[float]] = None,
                  device=None,
                  **kwargs) -> None:
@@ -136,41 +133,9 @@ class VQVAE2(nn.Module):
         self._summary_mode = False
         
         # Set up reconstruction objective
-        recon_obj = None
-        if recons_dist == "gaussian":
-            if recons_reduction == "mean":
-                recon_obj = mse_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = mse_per_image_sum
-            elif recons_reduction == "scaled_sum":
-                recon_obj = mse_total_batch_sum_scaled
-            else:
-                raise ValueError(f"MSE reduction {recons_reduction} not supported. Choose from: mean, sum, scaled_sum")
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for gaussian
-        elif recons_dist == "bernoulli":
-            if recons_reduction == "mean":
-                recon_obj = bce_with_logits_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = bce_with_logits_per_image_sum
-            else:
-                 raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
-            output_activation = "sigmoid"
-        elif recons_dist == "laplacian":
-            if recons_reduction == "mean":
-                recon_obj = laplacian_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = laplacian_per_image_sum
-            else:
-                 raise ValueError(f"Laplacian reduction {recons_reduction} not supported. Choose from: mean, sum")
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for laplacian
-        else:
-            raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
+        recon_obj, recons_activation = get_recon_obj_and_activation(
+            recons_objective, recons_activation=recons_activation, model=self
+        )
         self.recon_obj = recon_obj
 
         self.objectives = {
@@ -213,14 +178,14 @@ class VQVAE2(nn.Module):
         self.lambda_weights = lambda_weights
 
         # Setup output activation
-        if output_activation == "tanh":
-            self.output_activation = nn.Tanh()
-        elif output_activation == "sigmoid":
-            self.output_activation = nn.Sigmoid()
-        elif output_activation == "none":
-            self.output_activation = nn.Identity()
+        if recons_activation == "tanh":
+            self.recons_activation = nn.Tanh()
+        elif recons_activation == "sigmoid":
+            self.recons_activation = nn.Sigmoid()
+        elif recons_activation == "none":
+            self.recons_activation = nn.Identity()
         else:
-            raise ValueError(f"Output activation {output_activation} not supported")
+            raise ValueError(f"recons_activation {recons_activation} not supported")
 
         self.enc_b = Encoder(in_channels, hidden_dims[0], num_residual_layers, 32, stride=4)
         self.enc_t = Encoder(hidden_dims[0], hidden_dims[0], num_residual_layers, 32, stride=2)
@@ -241,7 +206,7 @@ class VQVAE2(nn.Module):
             num_residual_layers,
             32,
             stride=4,
-            output_activation=output_activation
+            output_activation=recons_activation
         )
         # Latent spatial dims from encoder strides: enc_b stride=4 (÷4), enc_t stride=2 (÷2)
         self.latent_spatial_dim_bottom = input_size // 4   # enc_b

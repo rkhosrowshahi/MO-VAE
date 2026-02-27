@@ -1,0 +1,40 @@
+dataset: CelebA
+data_dir: ../data
+normalize_inputs: true
+arch: recursive_cyclic_vae
+latent_dim: 128
+hidden_dims:
+- 32
+- 64
+- 128
+- 256
+- 512
+loss_weights:
+  reconstruction_loss: 1.0
+  recursive_kld_loss: 0.001573
+  cycle_loss: 0.00025
+recons_objective: mse
+recons_activation: none
+epochs: 100
+batch_size: 256
+optimizer: adam
+lr: 0.001
+wd: 1e-5
+scheduler: exponential
+scheduler_gamma: 0.95
+aggregator: aligned_mtl_median
+recursive_kld_anneal_steps: 25000
+seed: 12341234
+save_path: logs/
+save_freq: 10
+eval_freq: 1
+num_vis_samples: 9
+hv_ref:
+  reconstruction_loss: 1.1
+  recursive_kld_loss: 1.1
+  cycle_loss: 1.1
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: celeba rc_vae aligned_mtl_median ann25k lr1e-3 wd1e-5 seed12341234-mse
+wandb_group: celeba rc_vae aligned_mtl_median ann25k lr1e-3 wd1e-5-mse

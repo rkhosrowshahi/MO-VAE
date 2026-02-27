@@ -1,7 +1,7 @@
-configs/celeba-hq/gg_vq_vae_v3/amtl_median/config.yaml
-configs/celeba-hq/gg_vq_vae_v3/mgda_gn/config.yaml
-configs/celeba-hq/gg_vq_vae_v3/mgda_lgn/config.yaml
-configs/celeba-hq/gg_vq_vae_v3/mgda_ln/config.yaml
-configs/celeba-hq/gg_vq_vae_v3/sum/config.yaml
-configs/celeba-hq/gg_vq_vae_v3/upgrad/config.yaml
-configs/celeba-hq/gg_vq_vae_v3/amtl/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/amtl_median/bce/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/mgda_gn/bce/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/mgda_lgn/bce/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/mgda_ln/bce/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/sum/bce/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/upgrad/bce/config.yaml
+configs/celeba-hq/gg_vq_vae_v3/amtl/bce/config.yaml

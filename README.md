@@ -1,7 +1,7 @@
 # MO-VAE
 
-A multi-objective representation learning approach for variational autoencoders (VAE, Beta TC-VAE, VQ-VAE) that stabilizes gradients by decomposing the evidence lower bound (ELBO) into complementary objectives.
-We leverage multi-task gradient aggregation strategies—`jd_sum` and `UPGrad`—to jointly optimize reconstruction error and latent space regularization terms while keeping gradient updates conflict-free.
+A multi-objective representation learning approach for variational autoencoders (VAE, Beta-TC-VAE, VQ-VAE, VQ-VAE2, GG-VAE, GG-VQ-VAE) that stabilizes gradients by decomposing the evidence lower bound (ELBO) into complementary objectives.
+We leverage multi-task gradient aggregation strategies—`sum`, `UPGrad`, `MGDA`, `Aligned-MTL`—to jointly optimize reconstruction error and latent space regularization terms while keeping gradient updates conflict-free.
 
 ## Results
 
@@ -52,8 +52,11 @@ pip install -r requirements.txt
 ### Datasets
 
 Datasets are automatically downloaded to `./data/` on first run. Supported datasets:
-- **CIFAR100**: 60,000 32x32 color images in 100 classes
-- **CelebA**: 200,000+ celebrity face images (resized to 64x64)
+- **CIFAR10 / CIFAR100**: 32×32 color images
+- **CelebA / CelebA-HQ**: celebrity face images (64×64)
+- **Oxford-Flower-102**: flower images (64×64)
+- **animal-face**: AFHQ-style animal faces
+- **imagenet**: ImageNet (224×224)
 
 To use a custom data directory:
 ```bash
@@ -83,91 +86,81 @@ Enter your API key when prompted (find it at [wandb.ai/authorize](https://wandb.
 | `--wandb_tags` | Tags for filtering | `None` |
 
 #### Training without WandB
-Simply omit the `--use_wandb` flag:
+Omit the `--use_wandb` flag:
 ```bash
-python main.py --dataset cifar100 --arch vae --epochs 100 --agg upgrad ...
+python main.py --dataset cifar100 --arch vae --epochs 100 --agg sum ...
 ```
 
 ### Configuration Options
 
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `--dataset` | Dataset (`cifar100`, `celeba`) | `CIFAR10` |
-| `--arch` | Architecture (`vae`, `betatc_vae`, `vq_vae`) | `vae` |
-| `--agg` | Aggregator (`jd_sum`, `upgrad`) | `None` (sum) |
+| `--dataset` | Dataset (`cifar10`, `cifar100`, `celeba`, `celeba-hq`, `oxford-flower-102`, `animal-face`, `imagenet`) | `CIFAR10` |
+| `--arch` | Architecture (`vae`, `betatc_vae`, `vq_vae`, `vq_vae2`, `gg_vae`, `gg_vq_vae`, `gg_vq_vae_v3`, `gg_vq_vae2`) | `vae` |
+| `--agg` | Aggregator (`sum`, `upgrad`, `mgda_ln`, `mgda_gn`, `mgda_lgn`, `aligned_mtl`, `aligned_mtl_median`) | `sum` |
 | `--epochs` | Training epochs | `50` |
 | `--batch_size` | Batch size | `128` |
 | `--lr` | Learning rate | `0.001` |
 | `--optimizer` | Optimizer (`adam`, `adamw`, `sgd`) | `adam` |
-| `--latent_dim` | Latent dimension (VAE, BetaTCVAE) | `128` |
+| `--latent_dim` | Latent dimension (VAE, Beta-TC-VAE) | `128` |
 | `--hidden_dims` | Encoder/decoder channels | `[32,64,128,256,512]` |
 | `--embedding_dim` | VQ-VAE embedding dimension | `64` |
 | `--num_embeddings` | VQ-VAE codebook size | `512` |
-| `--recons_dist` | Reconstruction loss (`bernoulli`, `gaussian`) | `gaussian` |
-| `--recons_reduction` | Loss reduction (`mean`, `sum`) | `mean` |
-| `--normalize` | Normalize input images | `False` |
+| `--recons_objective` | Reconstruction loss (`mse`, `bce`, `l1`, `smooth_l1`, `perceptual`) | `mse` |
+| `--recons_activation` | Decoder activation (`tanh`, `sigmoid`, `none`) | Inferred from recons_objective |
+| `--normalize_inputs` | Normalize inputs to [-1,1] (use with mse/l1 objectives) | `False` |
+| `--num_vis_samples` | Samples per visualization grid | `4` |
 | `--device` | Device (`cuda:0`, `cpu`) | Auto-detect |
 | `--save_path` | Output directory | `logs/` |
 | `--save_freq` | Save samples every N epochs | `10` |
+| `--eval_freq` | Evaluate every N epochs | `1` |
 | `--seed` | Random seed for reproducibility | `None` |
+
+### YAML Configs & Runner
+
+Configs are stored under `configs/<dataset>/<arch>/<aggregator>/<recons_objective>/`. Run via:
+```bash
+# Single config
+python runner.py --f configs/oxford-flower-102/vq_vae2/sum/bce/config_1.yaml
+
+# From file list
+python runner.py --file-list configs/oxford-flower-102/vq_vae2/configs.txt
+```
 
 ## Usage
 
 ### VAE
 
-* Train VAE on CIFAR100 with jd_sum
-```
-python main.py --dataset cifar100 --arch vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CIFAR100 jd_sum"
-```
-* Train VAE on CIFAR100 with UPGrad
-```
-python main.py --dataset cifar100 --arch vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CIFAR100 upgrad"
-```
-* Train VAE on CelebA with jd_sum
-```
-python main.py --dataset celeba --arch vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CelebA jd_sum"
-```
-* Train VAE on CelebA with UPGrad
-```
-python main.py --dataset celeba --arch vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --hidden_dims 32 64 128 256 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 0.00025 --use_wandb --wandb_name "VAE CelebA upgrad"
+```bash
+# Train VAE on CIFAR100 with sum aggregator
+python main.py --dataset cifar100 --arch vae --epochs 100 --agg sum --latent_dim 128 --recons_objective bce --recons_activation sigmoid --use_wandb --wandb_name "VAE CIFAR100 sum"
+
+# Train VAE on CelebA with UPGrad
+python main.py --dataset celeba --arch vae --epochs 100 --agg upgrad --latent_dim 128 --recons_objective bce --recons_activation sigmoid --use_wandb --wandb_name "VAE CelebA upgrad"
 ```
 
 ### Beta TC-VAE
 
-* Train Beta TC-VAE on CIFAR100 with jd_sum
-```
-python main.py --dataset cifar100 --arch betatc_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CIFAR100 jd_sum"
-```
-* Train Beta TC-VAE on CIFAR100 with UPGrad
-```
-python main.py --dataset cifar100 --arch betatc_vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CIFAR100 upgrad"
-```
-* Train Beta TC-VAE on CelebA with jd_sum
-```
-python main.py --dataset celeba --arch betatc_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CelebA jd_sum"
-```
-* Train Beta TC-VAE on CelebA with UPGrad
-```
-python main.py --dataset celeba --arch betatc_vae --epochs 100 --agg upgrad --optimizer adamw --lr 0.001 --save_freq 10 --latent_dim 128 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 1.0 1.0 --use_wandb --wandb_name "BetaTCVAE CelebA upgrad"
+```bash
+python main.py --dataset cifar100 --arch betatc_vae --epochs 100 --agg upgrad --latent_dim 128 --recons_objective bce --recons_activation sigmoid --use_wandb --wandb_name "BetaTCVAE CIFAR100 upgrad"
 ```
 
-### VQ-VAE
+### VQ-VAE / VQ-VAE2 / GG-VQ-VAE
 
-* Train VQ-VAE on CIFAR100 with jd_sum
+```bash
+# VQ-VAE with BCE
+python main.py --dataset oxford-flower-102 --arch vq_vae --epochs 100 --agg upgrad --embedding_dim 64 --num_embeddings 512 --recons_objective bce --recons_activation sigmoid --use_wandb
+
+# VQ-VAE2 (hierarchical)
+python main.py --dataset oxford-flower-102 --arch vq_vae2 --epochs 100 --agg sum --embedding_dim 64 --num_embeddings 512 --recons_objective bce --recons_activation sigmoid --use_wandb
+
+# GG-VQ-VAE2 (VQ-VAE2 + gradient-guided + edge-matching losses)
+python main.py --dataset oxford-flower-102 --arch gg_vq_vae2 --epochs 100 --agg sum --embedding_dim 64 --num_embeddings 512 --recons_objective bce --recons_activation sigmoid --use_wandb
 ```
-python main.py --dataset cifar100 --arch vq_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CIFAR100 jd_sum"
-```
-* Train VQ-VAE on CIFAR100 with UPGrad
-```
-python main.py --dataset cifar100 --arch vq_vae --epochs 100 --agg upgrad --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CIFAR100 upgrad"
-```
-* Train VQ-VAE on CelebA with jd_sum
-```
-python main.py --dataset celeba --arch vq_vae --epochs 100 --agg jd_sum --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CelebA jd_sum"
-```
-* Train VQ-VAE on CelebA with UPGrad
-```
-python main.py --dataset celeba --arch vq_vae --epochs 100 --agg upgrad --optimizer adamw --lr 3e-4 --save_freq 10 --embedding_dim 64 --num_embeddings 512 --recons_dist bernoulli --recons_reduction mean --loss_weights 1.0 1.0 0.25 --use_wandb --wandb_name "VQ-VAE CelebA upgrad"
+
+For MSE objectives, enable input normalization:
+```bash
+python main.py --dataset oxford-flower-102 --arch vq_vae2 --recons_objective mse --recons_activation tanh --normalize_inputs ...
 ```
 <!-- CONTACT -->
 ## Contact

@@ -5,7 +5,7 @@ from torchsummary import summary
 import math
 from typing import List, Callable, Union, Any, TypeVar, Tuple, Optional
 
-from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled, bce_per_image_sum, bce_per_pixel_mean, laplacian_per_image_sum, laplacian_per_pixel_mean
+from utils.objectives import get_recon_obj_and_activation
 Tensor = TypeVar('torch.tensor')
 
 
@@ -20,8 +20,8 @@ class BetaTCVAE(nn.Module):
         anneal_steps: int = 200,
         input_size: int = 32,
         dataset_size: int = None,
-        recons_dist: str = "gaussian",
-        recons_reduction: str = "mean",
+        recons_objective: str = "mse",
+        recons_activation: str = None,
         lambda_weights: Optional[List[float]] = None,
         device=None,
         **kwargs
@@ -29,38 +29,7 @@ class BetaTCVAE(nn.Module):
         super(BetaTCVAE, self).__init__()
 
         self.device = device
-        
-        recon_obj = None
-        if recons_dist == "gaussian":
-            if recons_reduction == "mean":
-                recon_obj = mse_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = mse_per_image_sum
-            elif recons_reduction == "scaled_sum":
-                recon_obj = mse_total_batch_sum_scaled
-            else:
-                raise ValueError(f"MSE reduction {recons_reduction} not supported. Choose from: mean, sum, scaled_sum")
-
-            output_activation = "tanh"  # Default to tanh for gaussian
-        elif recons_dist == "bernoulli":
-            if recons_reduction == "mean":
-                recon_obj = bce_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = bce_per_image_sum
-            else:
-                 raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
-            output_activation = "sigmoid"
-        elif recons_dist == "laplacian":
-            if recons_reduction == "mean":
-                recon_obj = laplacian_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = laplacian_per_image_sum
-            else:
-                 raise ValueError(f"Laplacian reduction {recons_reduction} not supported. Choose from: mean, sum")
-            output_activation = "tanh"  # Default to tanh for laplacian
-        else:
-            raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
-
+        recon_obj, recons_activation = get_recon_obj_and_activation(recons_objective, recons_activation=recons_activation, model=self)
         self.latent_dim = latent_dim
         self.anneal_steps = anneal_steps
         self.input_size = input_size
@@ -116,16 +85,16 @@ class BetaTCVAE(nn.Module):
 
         self.hidden_dims = hidden_dims
 
-        # Setup output activation
-        self.output_activation = None
-        if output_activation == "tanh":
-            self.output_activation = nn.Tanh
-        elif output_activation == "sigmoid":
-            self.output_activation = nn.Sigmoid
-        elif output_activation == "none":
-            self.output_activation = nn.Identity
+        # Setup reconstruction activation
+        self.recons_activation = None
+        if recons_activation == "tanh":
+            self.recons_activation = nn.Tanh
+        elif recons_activation == "sigmoid":
+            self.recons_activation = nn.Sigmoid
+        elif recons_activation == "none":
+            self.recons_activation = nn.Identity
         else:
-            raise ValueError(f"Output activation {output_activation} not supported")
+            raise ValueError(f"recons_activation {recons_activation} not supported")
 
         # Build Encoder
         encoder_in_channels = in_channels
@@ -195,7 +164,7 @@ class BetaTCVAE(nn.Module):
             nn.Conv2d(
                 hidden_dims_reversed[-1], out_channels=in_channels, kernel_size=3, padding=1
             ),
-            self.output_activation(),
+            self.recons_activation(),
         )
 
     def encode(self, input: Tensor) -> List[Tensor]:

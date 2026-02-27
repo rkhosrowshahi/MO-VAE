@@ -235,9 +235,10 @@ def main():
         help='Directory containing the dataset'
     )
     parser.add_argument(
-        '--normalize', 
+        '--normalize_inputs', 
         action='store_true',
-        help='Normalize the dataset'
+        dest='normalize_inputs',
+        help='Normalize inputs to [-1,1] (mean=0.5, std=0.5)'
     )
     parser.add_argument(
         '--batch_size', 
@@ -300,7 +301,7 @@ def main():
     print(f"\nStarting benchmark with the following settings:")
     print(f"  Dataset: {args.dataset}")
     print(f"  Data directory: {args.data_dir}")
-    print(f"  Normalize: {args.normalize}")
+    print(f"  Normalize inputs: {getattr(args, 'normalize_inputs', False)}")
     print(f"  Batch size: {args.batch_size}")
     print(f"  Worker counts to test: {args.workers}")
     print(f"  Pin memory: {not args.no_pin_memory}")
@@ -316,7 +317,7 @@ def main():
     results = benchmark_workers(
         dataset_name=args.dataset,
         data_dir=args.data_dir,
-        normalize=args.normalize,
+        normalize=getattr(args, 'normalize_inputs', False),
         batch_size=args.batch_size,
         num_batches=args.num_batches,
         worker_counts=args.workers,

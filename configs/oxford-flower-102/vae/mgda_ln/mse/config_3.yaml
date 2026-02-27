@@ -1,0 +1,37 @@
+dataset: oxford-flower-102
+data_dir: ../data
+normalize_inputs: true
+arch: vae
+latent_dim: 4096
+hidden_dims:
+- 32
+- 64
+- 128
+- 256
+- 512
+loss_weights:
+  reconstruction_loss: 1.0
+  kld_loss: 0.1255
+recons_objective: mse
+recons_activation: none
+epochs: 1000
+batch_size: 128
+optimizer: adam
+lr: 1e-4
+wd: 0.0
+scheduler: cosine
+scheduler_lr_min: 1e-6
+aggregator: mgda_ln
+seed: 12341234
+save_path: logs/
+save_freq: 200
+eval_freq: 200
+num_vis_samples: 4
+hv_ref:
+  reconstruction_loss: 1.1
+  kld_loss: 1.1
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: oxford_flower_102-vae-128d-w_kl=0.1255-lr1e-3-mgda_ln-seed12341234-mse
+wandb_group: oxford_flower_102-vae-128d-w_kl=0.1255-lr1e-3-mgda_ln-mse

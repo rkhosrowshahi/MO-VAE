@@ -52,7 +52,7 @@ def load_model_from_checkpoint(model_path, dataset, arch, device):
     
     # Get dataset to determine input_size
     _, _, input_size = get_dataset(dataset, data_dir=args.data_dir if hasattr(args, 'data_dir') else './data', 
-                                    normalize=args.normalize if hasattr(args, 'normalize') else False)
+                                    normalize=getattr(args, 'normalize_inputs', getattr(args, 'normalize', False)))
     
     # Set arch in args if not present
     if not hasattr(args, 'arch'):
@@ -260,7 +260,7 @@ def evaluate(arch, dataset, model_path, device=None, batch_size=128, num_workers
     train_dataset, test_dataset, input_size = get_dataset(
         dataset, 
         data_dir=getattr(checkpoint_args, 'data_dir', './data'),
-        normalize=getattr(checkpoint_args, 'normalize', False)
+        normalize=getattr(checkpoint_args, 'normalize_inputs', getattr(checkpoint_args, 'normalize', False))
     )
     
     test_loader = DataLoader(

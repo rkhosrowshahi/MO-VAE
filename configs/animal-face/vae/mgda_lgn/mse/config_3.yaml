@@ -24,8 +24,8 @@ scheduler_lr_min: 1e-6
 aggregator: mgda_lgn
 seed: 12341234
 save_path: logs/
-save_freq: 200
-eval_freq: 200
+save_freq: 100
+eval_freq: 100
 num_vis_samples: 4
 hv_ref:
   reconstruction_loss: 1.1

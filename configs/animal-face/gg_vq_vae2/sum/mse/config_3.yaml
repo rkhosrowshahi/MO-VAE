@@ -1,0 +1,41 @@
+dataset: animal-face
+data_dir: ../data
+normalize_inputs: true
+arch: gg_vq_vae2
+embedding_dim: 64
+num_embeddings: 512
+hidden_dims:
+- 128
+- 256
+loss_weights:
+  reconstruction_loss: 1.0
+  embedding_loss: 1.0
+  commitment_loss: 0.25
+  gradient_guided_loss: 1.0
+  edge_matching_loss: 1.0
+recons_objective: mse
+recons_activation: none
+epochs: 1000
+batch_size: 128
+optimizer: adam
+lr: 1e-4
+wd: 0.0
+scheduler: cosine
+scheduler_lr_min: 1e-6
+aggregator: sum
+seed: 12341234
+save_path: logs/
+save_freq: 100
+eval_freq: 100
+num_vis_samples: 4
+hv_ref:
+  reconstruction_loss: 1.1
+  gradient_guided_loss: 1.1
+  embedding_loss: 1.1
+  commitment_loss: 1.1
+  edge_matching_loss: 1.1
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: animal_face-gg_vq_vae2-512k-64d-mse-sum-seed12341234
+wandb_group: animal_face-gg_vq_vae2-512k-64d-mse-sum

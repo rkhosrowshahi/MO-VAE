@@ -34,4 +34,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba cycle_vae 100ep 64bs lr1e-3 wd1e-5 upgrad seed12341234
-wandb_group: celeba cycle_vae 100ep 64bs lr1e-3 wd1e-5 upgrad
+wandb_group: celeba cycle_vae 100ep 64bs lr1e-3 wd1e-bce-5 upgrad

@@ -33,5 +33,5 @@ hv_ref:
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: animal_face-vq_vae2-512k-64d-mgda_gn-seed42
-wandb_group: animal_face-vq_vae2-512k-64d-mgda_gn
+wandb_name: animal_face-vq_vae2-512k-64d-bce-mgda_gn-seed42
+wandb_group: animal_face-vq_vae2-512k-64d-bce-mgda_gn

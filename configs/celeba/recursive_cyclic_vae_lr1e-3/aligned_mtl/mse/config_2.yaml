@@ -37,4 +37,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba rc_vae aligned_mtl_min ann25k lr1e-3 wd1e-5 seed123123123-mse
-wandb_group: celeba rc_vae aligned_mtl_min ann25k lr1e-3 wd1e-5-mse
+wandb_group: celeba rc_vae aligned_mtl_min ann25k lr1e-3 wd1e-mse-5

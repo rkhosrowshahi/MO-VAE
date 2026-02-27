@@ -39,4 +39,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba rc_vae mgda_l2 ann25k lr1e-3 wd1e-5 seed123123123
-wandb_group: celeba rc_vae mgda_l2 ann25k lr1e-3 wd1e-5
+wandb_group: celeba rc_vae mgda_l2 ann25k lr1e-3 wd1e-bce-5

@@ -7,7 +7,7 @@ dataset: celeba-hq
 data_dir: ../data
 normalize: false
 # Model architecture
-arch: vq_vae
+arch: vq_vae2
 embedding_dim: 64
 num_embeddings: 512
 hidden_dims: [128, 256]
@@ -35,6 +35,6 @@ hv_ref: [1.1, 1.1, 1.1]
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba_hq-vq_vae-512k-64d-mgda_gn-seed42
-wandb_group: celeba_hq-vq_vae-512k-64d-mgda_gn
+wandb_name: celeba_hq-vq_vae2-512k-64d-mgda_gn-seed42
+wandb_group: celeba_hq-vq_vae2-512k-64d-mgda_gn
 

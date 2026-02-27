@@ -1,0 +1,3 @@
+configs/celeba-hq/vq_vae2/mgda/config.yaml
+configs/celeba-hq/vq_vae2/mgda/config_seed123.yaml
+configs/celeba-hq/vq_vae2/mgda/config_seed999.yaml

@@ -594,18 +594,28 @@ def generate_reconstructed_samples(
     originals = torch.cat(originals, dim=0)
     reconstructions = torch.cat(reconstructions, dim=0)
 
+    # Map both to [0, 1] for display (handles [0,1], [-1,1], or logits), then stack and grid without normalize.
+    def to_vis(x: torch.Tensor) -> torch.Tensor:
+        x = x.clone().float()
+        if x.min() < -0.01 or x.max() > 1.01:
+            if x.min() >= -1.5 and x.max() <= 1.5:
+                x = (x + 1.0) * 0.5  # [-1, 1] -> [0, 1]
+            else:
+                x = torch.sigmoid(x)  # logits -> [0, 1]
+        return torch.clamp(x, 0.0, 1.0)
+
+    originals_vis = to_vis(originals)
+    recons_vis = to_vis(reconstructions)
+
     comparison = []
     for idx in range(num_samples):
-        comparison.append(originals[idx])
-        comparison.append(reconstructions[idx])
+        comparison.append(originals_vis[idx])
+        comparison.append(recons_vis[idx])
     comparison_tensor = torch.stack(comparison)
-    # Use value_range=(0, 1) so make_grid doesn't infer min/max from the tensor (originals and
-    # recons are already in [0, 1] after optional sigmoid for logits).
     grid = make_grid(
         comparison_tensor,
         nrow=int(np.sqrt(num_samples)) * 2,
-        normalize=True,
-        value_range=(0.0, 1.0),
+        normalize=False,
     )
 
     # Convert tensor to numpy array (for both matplotlib and wandb, avoids Windows temp directory issues)

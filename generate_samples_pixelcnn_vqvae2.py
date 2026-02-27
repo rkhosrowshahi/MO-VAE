@@ -150,7 +150,7 @@ def main():
     )
     
     # Determine value range based on VQ-VAE2 output activation
-    value_range = (-1, 1) if vqvae2.output_activation.__class__.__name__ == 'Tanh' else (0, 1)
+    value_range = (-1, 1) if vqvae2.recons_activation.__class__.__name__ == 'Tanh' else (0, 1)
     
     # Save samples
     if args.save_grid:

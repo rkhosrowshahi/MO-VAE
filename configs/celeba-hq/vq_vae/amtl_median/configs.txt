@@ -1,6 +1,6 @@
-configs/celeba-hq/vq_vae/amtl/config.yaml
-configs/celeba-hq/vq_vae/mgda/config.yaml
-configs/celeba-hq/vq_vae/amtl/config_seed123.yaml
-configs/celeba-hq/vq_vae/mgda/config_seed123.yaml
-configs/celeba-hq/vq_vae/amtl/config_seed999.yaml
-configs/celeba-hq/vq_vae/mgda/config_seed999.yaml
+configs/celeba-hq/vq_vae/amtl/bce/config.yaml
+configs/celeba-hq/vq_vae/mgda/bce/config.yaml
+configs/celeba-hq/vq_vae/amtl/bce/config_seed123123.yaml
+configs/celeba-hq/vq_vae/mgda/bce/config_seed123123.yaml
+configs/celeba-hq/vq_vae/amtl/bce/config_seed12341234.yaml
+configs/celeba-hq/vq_vae/mgda/bce/config_seed12341234.yaml

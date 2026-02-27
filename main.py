@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from argparse import ArgumentParser
@@ -662,9 +663,14 @@ def build_hv_indicator(objective_keys, args):
 
     num_objectives = len(objective_keys)
     
-    # Use hv_ref list if provided and has correct length, otherwise default to 1.1 for all objectives
-    if hasattr(args, 'hv_ref') and args.hv_ref is not None and len(args.hv_ref) == num_objectives:
-        ref_point = args.hv_ref
+    # Use hv_ref if provided: dict maps objective_keys to values; list must match length
+    if hasattr(args, 'hv_ref') and args.hv_ref is not None:
+        if isinstance(args.hv_ref, dict):
+            ref_point = [args.hv_ref.get(k, 1.1) for k in objective_keys]
+        elif isinstance(args.hv_ref, (list, tuple)) and len(args.hv_ref) == num_objectives:
+            ref_point = list(args.hv_ref)
+        else:
+            ref_point = [1.1] * num_objectives
     else:
         ref_point = [1.1] * num_objectives
 
@@ -879,7 +885,7 @@ def main(args):
             - wandb_project: Wandb project name
             - eval_freq: Frequency of evaluation (every N epochs)
             - save_freq: Frequency of saving samples (every N epochs)
-            - num_samples: Number of samples to generate for visualization
+            - num_vis_samples: Number of samples per visualization grid
             - max_fid_samples: Maximum samples for FID computation
             - And other model/training specific parameters
             
@@ -894,14 +900,15 @@ def main(args):
     """
     device = torch.device(args.device)
 
-    train_dataset, test_dataset, input_size = get_dataset(args.dataset, data_dir=args.data_dir, normalize=args.normalize)
+    normalize_inputs = getattr(args, 'normalize_inputs', getattr(args, 'normalize', False))
+    train_dataset, test_dataset, input_size = get_dataset(args.dataset, data_dir=args.data_dir, normalize=normalize_inputs)
     # Most models in this repo use `tanh` outputs for gaussian/laplacian losses, which assumes inputs are normalized to [-1, 1].
-    # If `--normalize` is off, datasets are in [0, 1] and training will silently suffer.
-    if (not args.normalize) and getattr(args, "recons_dist", None) in {"gaussian", "laplacian"}:
+    # If `normalize_inputs` is off, datasets are in [0, 1] and training will silently suffer.
+    if (not normalize_inputs) and getattr(args, "recons_objective", "mse") in {"mse", "l1", "smooth_l1", "perceptual"}:
         tqdm.write(
-            "Warning: `normalize=false` with `recons_dist` in {gaussian, laplacian}. "
+            "Warning: `normalize_inputs=false` with `recons_objective` in {mse, l1, smooth_l1, perceptual}. "
             "Your data will be in [0,1] but many decoders output tanh in [-1,1]. "
-            "Consider enabling `--normalize` (mean=0.5, std=0.5) for stable training."
+            "Consider enabling `--normalize_inputs` (mean=0.5, std=0.5) for stable training."
         )
 
     train_loader = DataLoader(
@@ -1097,7 +1104,7 @@ def main(args):
             gen_path = os.path.join(save_root, "figures", "generated", f"epoch_{epoch:03d}_random_samples.pdf")
             generate_random_samples(
                 net,
-                num_samples=args.num_samples,
+                num_samples=getattr(args, 'num_vis_samples', getattr(args, 'num_samples', 4)),
                 device=device,
                 save_path=gen_path,
                 log_to_wandb=args.use_wandb,
@@ -1110,7 +1117,7 @@ def main(args):
                 net,
                 "test",
                 test_loader,
-                args.num_samples,
+                getattr(args, 'num_vis_samples', getattr(args, 'num_samples', 4)),
                 device,
                 save_path=test_path,
                 log_to_wandb=args.use_wandb,
@@ -1123,7 +1130,7 @@ def main(args):
                 net,
                 "train",
                 train_loader,
-                args.num_samples,
+                getattr(args, 'num_vis_samples', getattr(args, 'num_samples', 4)),
                 device,
                 save_path=train_path,
                 log_to_wandb=args.use_wandb,
@@ -1257,7 +1264,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_path", type=str, default="logs/")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--dataset", type=str, default="CIFAR10")
-    parser.add_argument("--normalize", action="store_true")
+    parser.add_argument("--normalize_inputs", action="store_true", dest="normalize_inputs", help="Normalize inputs to [-1,1] (mean=0.5, std=0.5)")
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--aggregator", "--agg", type=str, default=None)
@@ -1323,9 +1330,15 @@ if __name__ == "__main__":
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--hidden_dims", type=int, nargs="+", default=[32, 64, 128, 256, 512])
     parser.add_argument("--num_residual_layers", type=int, default=2)
-    parser.add_argument("--recons_dist", type=str, default="gaussian", choices=["bernoulli", "gaussian", "laplacian"], help="Reconstruction distribution: bernoulli (BCE), gaussian (MSE), or laplacian (L1)")
-    parser.add_argument("--recons_reduction", type=str, default="mean", choices=["mean", "sum", "scaled_sum"], help="Loss reduction type: mean (per_pixel_mean), sum (per_image_sum), scaled_sum (total_batch_sum_scaled - MSE only)")
-    parser.add_argument("--loss_weights", type=float, nargs="+", default=[1.0, 1.0])
+    parser.add_argument("--recons_objective", type=str, default="mse", choices=["mse", "bce", "l1", "smooth_l1", "perceptual"], help="Reconstruction objective: mse, bce, l1, smooth_l1, or perceptual")
+    parser.add_argument("--recons_activation", type=str, default=None, choices=["tanh", "sigmoid", "none"], help="Reconstruction decoder activation. If None, inferred from recons_objective (tanh for mse/l1/smooth_l1/perceptual, sigmoid for bce)")
+    parser.add_argument(
+        "--loss_weights",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Loss weights as dict (JSON string) or list of floats. E.g. '{\"reconstruction_loss\":1.0,\"commitment_loss\":1.0,\"embedding_loss\":0.25}' or '1.0 1.0 0.25'"
+    )
     parser.add_argument("--optimizer", type=str, default="adam")
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--max_grad_norm", type=float, default=None)
@@ -1354,8 +1367,8 @@ if __name__ == "__main__":
     parser.add_argument("--vit_num_heads", type=int, default=16, help="Sphere encoder ViT: num attention heads")
     parser.add_argument("--vit_mixer_depth", type=int, default=2, help="Sphere encoder ViT: MLP-Mixer depth (2 CIFAR, 4 large img)")
     parser.add_argument("--num_classes", type=int, default=0, help="Num classes for conditional generation (0 = unconditional)")
-    parser.add_argument("--hv_ref", type=float, nargs="+", default=[1.1, 1.1])
-    parser.add_argument("--num_samples", type=int, default=64)
+    parser.add_argument("--hv_ref", type=str, nargs="*", default=None, help="Ref point per objective: JSON dict or list of floats")
+    parser.add_argument("--num_vis_samples", type=int, default=4, dest="num_vis_samples", help="Number of samples per visualization grid (random + reconstructions)")
     parser.add_argument("--save_freq", type=int, default=10)
     parser.add_argument("--eval_freq", type=int, default=1)
     parser.add_argument("--use_wandb", action="store_true")
@@ -1368,6 +1381,20 @@ if __name__ == "__main__":
     parser.add_argument("--max_gen_metrics_samples", type=int, default=10000, help="Maximum number of samples to use for IS, Precision, and Recall computation")
 
     args = parser.parse_args()
+    # Parse loss_weights: JSON dict or list of floats
+    if args.loss_weights is not None and len(args.loss_weights) > 0:
+        if len(args.loss_weights) == 1 and args.loss_weights[0].strip().startswith("{"):
+            args.loss_weights = json.loads(args.loss_weights[0])
+        else:
+            args.loss_weights = [float(x) for x in args.loss_weights]
+    # Parse hv_ref: JSON dict or list of floats
+    if args.hv_ref is not None and len(args.hv_ref) > 0:
+        if len(args.hv_ref) == 1 and args.hv_ref[0].strip().startswith("{"):
+            args.hv_ref = json.loads(args.hv_ref[0])
+            # Convert dict values to float (YAML may give ints)
+            args.hv_ref = {k: float(v) for k, v in args.hv_ref.items()}
+        else:
+            args.hv_ref = [float(x) for x in args.hv_ref]
     if args.seed is not None:
         set_seed(args.seed)
     main(args)

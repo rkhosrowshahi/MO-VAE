@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torchsummary import summary
 
-from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled, bce_per_image_sum, bce_per_pixel_mean, laplacian_per_image_sum, laplacian_per_pixel_mean, kl_divergence
+from utils.objectives import kl_divergence, get_recon_obj_and_activation
 
 
 class PrintLayer(nn.Module):
@@ -32,9 +32,8 @@ class VAE(nn.Module):
                 in_channels=3, 
                 hidden_dims=None, 
                 layer_norm="batch", 
-                output_activation="tanh", 
-                recons_dist="gaussian", 
-                recons_reduction="mean", 
+                recons_activation="tanh",
+                recons_objective="mse",
                 lambda_weights=None, 
                 device=None, 
                 **kwargs) -> None:
@@ -42,45 +41,8 @@ class VAE(nn.Module):
 
         self.device = device
         
-        recon_obj = None
         kld_obj = kl_divergence
-        
-        if recons_dist == "gaussian":
-            if recons_reduction == "mean":
-                recon_obj = mse_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = mse_per_image_sum
-            elif recons_reduction == "scaled_sum":
-                recon_obj = mse_total_batch_sum_scaled
-            else:
-                raise ValueError(f"MSE reduction {recons_reduction} not supported. Choose from: mean, sum, scaled_sum")
-            
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for gaussian
-        elif recons_dist == "bernoulli":
-            if recons_reduction == "mean":
-                recon_obj = bce_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = bce_per_image_sum
-            else:
-                 raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
-            output_activation = "sigmoid"
-        elif recons_dist == "laplacian":
-            if recons_reduction == "mean":
-                recon_obj = laplacian_per_pixel_mean
-            elif recons_reduction == "sum":
-                recon_obj = laplacian_per_image_sum
-            else:
-                 raise ValueError(f"Laplacian reduction {recons_reduction} not supported. Choose from: mean, sum")
-            if output_activation == "tanh":
-                pass  # Keep tanh
-            else:
-                output_activation = "tanh"  # Default to tanh for laplacian
-        else:
-            raise ValueError(f"Reconstruction distribution {recons_dist} not supported. Choose from: gaussian, bernoulli, laplacian")
-
+        recon_obj, recons_activation = get_recon_obj_and_activation(recons_objective, recons_activation=recons_activation, model=self)
         self.recon_obj = recon_obj
         self.kld_obj = kld_obj
 
@@ -142,14 +104,14 @@ class VAE(nn.Module):
         else:
             raise ValueError(f"Layer norm {layer_norm} not supported")
 
-        if output_activation == "tanh":
-            output_activation = nn.Tanh
-        elif output_activation == "sigmoid":
-            output_activation = nn.Sigmoid
-        elif output_activation == "none":
-            output_activation = nn.Identity
+        if recons_activation == "tanh":
+            recons_activation_fn = nn.Tanh
+        elif recons_activation == "sigmoid":
+            recons_activation_fn = nn.Sigmoid
+        elif recons_activation == "none":
+            recons_activation_fn = nn.Identity
         else:
-            raise ValueError(f"Output activation {output_activation} not supported")
+            raise ValueError(f"recons_activation {recons_activation} not supported")
         
         # Build Encoder
         modules = []
@@ -207,7 +169,7 @@ class VAE(nn.Module):
             nn.LeakyReLU(),
             nn.Conv2d(hidden_dims_reversed[-1], out_channels=in_channels,
                       kernel_size=3, padding=1),
-            output_activation()
+            recons_activation_fn()
         )
         
         self.decoder = nn.Sequential(*modules)

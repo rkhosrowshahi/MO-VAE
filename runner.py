@@ -5,6 +5,7 @@ Usage: python runner.py --f scripts/celeba/sum/script.yaml
 """
 
 import argparse
+import json
 import subprocess
 import sys
 import yaml
@@ -32,6 +33,8 @@ def yaml_to_args(config):
     aliases = {
         'agg': 'aggregator',
         'wd': 'weight_decay',
+        'normalize': 'normalize_inputs',  # renamed from normalize
+        'num_samples': 'num_vis_samples',  # renamed: samples per vis grid
         # Backward/compat: aggregator epsilons
         'norm_eps': 'agg_norm_eps',
         'reg_eps': 'agg_reg_eps',
@@ -58,6 +61,10 @@ def yaml_to_args(config):
         if isinstance(value, bool):
             if value:
                 args.append(arg_name)
+        # Handle dict (e.g. loss_weights) - pass as JSON string
+        elif isinstance(value, dict):
+            args.append(arg_name)
+            args.append(json.dumps(value))
         # Handle list arguments
         elif isinstance(value, list):
             args.append(arg_name)

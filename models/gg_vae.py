@@ -21,9 +21,8 @@ class GGVAE(VAE):
                  in_channels=3, 
                  hidden_dims=None, 
                  layer_norm="batch", 
-                 output_activation="tanh", 
-                 recons_dist="gaussian", 
-                 recons_reduction="mean", 
+                 recons_activation="tanh", 
+                 recons_objective="mse",
                  lambda_weights=None, 
                  device=None, 
                  edge_matching_version=1,
@@ -35,9 +34,8 @@ class GGVAE(VAE):
             in_channels=in_channels,
             hidden_dims=hidden_dims,
             layer_norm=layer_norm,
-            output_activation=output_activation,
-            recons_dist=recons_dist,
-            recons_reduction=recons_reduction,
+            recons_activation=recons_activation,
+            recons_objective=recons_objective,
             lambda_weights=None,  # We'll set this after adding additional objectives
             device=device,
             **kwargs
@@ -130,12 +128,12 @@ class GGVAE(VAE):
         input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
         input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
         
-        # Edge-weighted pixel loss: BCE (pixels are in [0,1])
+        # Edge-weighted pixel loss: MSE
         grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS) #(batch_size,C,H,W)
         weights = grad_target.max(dim=1)[0]  # simplified
         weights = weights / (weights.max() + EPS)  # normalize to [0,1]
         
-        pixel_loss = F.binary_cross_entropy(recons, inputs, reduction='none')  # BCE here
+        pixel_loss = F.mse_loss(recons, inputs, reduction='none')  # MSE here
         weighted_pixel_loss = (weights.unsqueeze(1) * pixel_loss).mean()
         
         return weighted_pixel_loss

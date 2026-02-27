@@ -1,0 +1,41 @@
+dataset: CelebA
+data_dir: ../data
+normalize_inputs: true
+arch: gg_vq_vae_v2
+embedding_dim: 64
+num_embeddings: 512
+hidden_dims:
+- 128
+- 256
+loss_weights:
+  reconstruction_loss: 1.0
+  embedding_loss: 1.0
+  commitment_loss: 0.25
+  gradient_guided_loss: 1.0
+  edge_matching_loss: 1.0
+recons_objective: mse
+recons_activation: none
+epochs: 100
+batch_size: 128
+optimizer: adam
+lr: 3e-4
+wd: 0.0
+aggregator: jd_sum
+seed: 42
+save_path: logs/
+save_freq: 10
+eval_freq: 10
+num_vis_samples: 9
+hv_ref:
+  reconstruction_loss: 1.1
+  gradient_guided_loss: 1.1
+  embedding_loss: 1.1
+  commitment_loss: 1.1
+  edge_matching_loss: 1.1
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: celeba gg_vq_vae_v2 512k 64d jd_sum 1*mse + 1*embedding + 0.25*commitment
+  + 1*gradient_guided + 1*edge_matching seed42
+wandb_group: celeba gg_vq_vae_v2 512k 64d jd_sum 1*mse + 1*embedding + 0.25*commitment
+  + 1*gradient_guided + 1*edge_matching

@@ -309,7 +309,7 @@ def main():
                 sample_path,
                 nrow=8,
                 normalize=True,
-                value_range=(-1, 1) if vqvae.output_activation.__class__.__name__ == 'Tanh' else (0, 1)
+                value_range=(-1, 1) if vqvae.recons_activation.__class__.__name__ == 'Tanh' else (0, 1)
             )
             print(f"Saved samples to {sample_path}")
             

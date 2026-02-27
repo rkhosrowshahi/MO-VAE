@@ -1,0 +1,39 @@
+dataset: imagenet
+data_dir: ../data
+normalize_inputs: true
+arch: vae
+latent_dim: 4096
+hidden_dims:
+- 32
+- 64
+- 128
+- 256
+- 512
+loss_weights:
+  reconstruction_loss: 1.0
+  kld_loss: 0.0001
+recons_objective: mse
+recons_activation: none
+epochs: 20
+batch_size: 128
+optimizer: adam
+lr: 1e-4
+wd: 0
+scheduler: cosine
+scheduler_lr_min: 1e-6
+aggregator: mgda
+mgda_epsilon: 1e-5
+mgda_max_iters: 250
+seed: 42
+save_path: logs/
+save_freq: 10
+eval_freq: 10
+num_vis_samples: 4
+hv_ref:
+  reconstruction_loss: 1.1
+  kld_loss: 1.1
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: imagenet-vae-4096d-1.0e-4*kld-mgda-seed42-mse
+wandb_group: imagenet-vae-4096d-1.0e-4*kld-mgda-mse

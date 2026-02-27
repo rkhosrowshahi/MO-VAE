@@ -599,7 +599,14 @@ def generate_reconstructed_samples(
         comparison.append(originals[idx])
         comparison.append(reconstructions[idx])
     comparison_tensor = torch.stack(comparison)
-    grid = make_grid(comparison_tensor, nrow=int(np.sqrt(num_samples)) * 2, normalize=True)
+    # Use value_range=(0, 1) so make_grid doesn't infer min/max from the tensor (originals and
+    # recons are already in [0, 1] after optional sigmoid for logits).
+    grid = make_grid(
+        comparison_tensor,
+        nrow=int(np.sqrt(num_samples)) * 2,
+        normalize=True,
+        value_range=(0.0, 1.0),
+    )
 
     # Convert tensor to numpy array (for both matplotlib and wandb, avoids Windows temp directory issues)
     grid_np = grid.cpu().numpy().transpose((1, 2, 0))

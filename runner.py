@@ -189,7 +189,8 @@ Examples:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):  # Skip empty lines and comments
-                    config_files.append(line)
+                    # Normalize path separators (backslash -> forward slash) for cross-platform
+                    config_files.append(line.replace('\\', '/'))
     
     # Validate that at least one config file is provided
     if not config_files:

@@ -168,16 +168,11 @@ def get_network(input_size, num_channels=3, args=None, device=None):
         if lambda_weights is None:
             lambda_weights = {"reconstruction_loss": 1.0, "gradient_guided_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25}
         return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_objective=recons_objective, recons_activation=recons_activation, lambda_weights=lambda_weights, device=device, version="v1")
-    elif arch.lower() == 'gg_vq_vae_v2':
-        # Default lambda_weights for GGVQVAE v2: + edge_matching_loss
+    elif arch.lower() in ('gg_vq_vae_v2', 'gg_vq_vae_v3', 'gg_vq_vae_v4', 'gg_vq_vae_v5', 'gg_vq_vae_v6', 'gg_vq_vae_v7', 'gg_vq_vae_v8'):
+        version = arch.lower().replace('gg_vq_vae_', '')
         if lambda_weights is None:
             lambda_weights = {"reconstruction_loss": 1.0, "gradient_guided_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "edge_matching_loss": 1.0}
-        return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_objective=recons_objective, recons_activation=recons_activation, lambda_weights=lambda_weights, device=device, version="v2")
-    elif arch.lower() == 'gg_vq_vae_v3':
-        # Default lambda_weights for GGVQVAE v3: + edge_matching_loss
-        if lambda_weights is None:
-            lambda_weights = {"reconstruction_loss": 1.0, "gradient_guided_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "edge_matching_loss": 1.0}
-        return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_objective=recons_objective, recons_activation=recons_activation, lambda_weights=lambda_weights, device=device, version="v3")
+        return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_objective=recons_objective, recons_activation=recons_activation, lambda_weights=lambda_weights, device=device, version=version)
     elif arch.lower() == 'vq_vae2':
         # Default lambda_weights for VQVAE2: reconstruction_loss, commitment_loss, embedding_loss
         if lambda_weights is None:

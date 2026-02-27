@@ -266,6 +266,10 @@ class VGGFeatureExtractor(nn.Module):
         
         # Clamp to valid range
         x = torch.clamp(x, 0, 1)
+
+        # Ensure 3-channel input (VGG16 expects RGB)
+        if x.size(1) == 1:
+            x = x.expand(-1, 3, -1, -1)
         
         # Normalize for VGG (ImageNet normalization)
         mean = torch.tensor([0.485, 0.456, 0.406], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
@@ -410,28 +414,40 @@ class InceptionV3(nn.Module):
         # std = torch.tensor([0.229, 0.224, 0.225], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
         # x = (x - mean) / std
         
-        # Get features from the last pooling layer
-        x = self.model.Conv2d_1a_3x3(x)
-        x = self.model.Conv2d_2a_3x3(x)
-        x = self.model.Conv2d_2b_3x3(x)
-        x = F.max_pool2d(x, kernel_size=3, stride=2)
-        x = self.model.Conv2d_3b_1x1(x)
-        x = self.model.Conv2d_4a_3x3(x)
-        x = F.max_pool2d(x, kernel_size=3, stride=2)
-        x = self.model.Mixed_5b(x)
-        x = self.model.Mixed_5c(x)
-        x = self.model.Mixed_5d(x)
-        x = self.model.Mixed_6a(x)
-        x = self.model.Mixed_6b(x)
-        x = self.model.Mixed_6c(x)
-        x = self.model.Mixed_6d(x)
-        x = self.model.Mixed_6e(x)
-        x = self.model.Mixed_7a(x)
-        x = self.model.Mixed_7b(x)
-        x = self.model.Mixed_7c(x)
-        x = F.adaptive_avg_pool2d(x, (1, 1))
-        x = x.view(x.size(0), -1)
-        return x
+        # Ensure 3-channel input (InceptionV3 expects RGB)
+        if x.size(1) == 1:
+            x = x.expand(-1, 3, -1, -1)
+        elif x.size(1) != 3:
+            raise ValueError(f"InceptionV3 expects 1 or 3 channels, got {x.size(1)}")
+
+        # Ensure spatial dimensions are at least 75x75 (minimum for InceptionV3 architecture)
+        if x.size(-2) < 75 or x.size(-1) < 75:
+            x = F.interpolate(x, size=(299, 299), mode='bilinear', align_corners=False)
+
+        try:
+            x = self.model.Conv2d_1a_3x3(x)
+            x = self.model.Conv2d_2a_3x3(x)
+            x = self.model.Conv2d_2b_3x3(x)
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            x = self.model.Conv2d_3b_1x1(x)
+            x = self.model.Conv2d_4a_3x3(x)
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            x = self.model.Mixed_5b(x)
+            x = self.model.Mixed_5c(x)
+            x = self.model.Mixed_5d(x)
+            x = self.model.Mixed_6a(x)
+            x = self.model.Mixed_6b(x)
+            x = self.model.Mixed_6c(x)
+            x = self.model.Mixed_6d(x)
+            x = self.model.Mixed_6e(x)
+            x = self.model.Mixed_7a(x)
+            x = self.model.Mixed_7b(x)
+            x = self.model.Mixed_7c(x)
+            x = F.adaptive_avg_pool2d(x, (1, 1))
+            x = x.view(x.size(0), -1)
+            return x
+        except Exception as e:
+            raise RuntimeError(f"InceptionV3 forward pass failed: {e}") from e
 
 
 class InceptionV3ForIS(nn.Module):
@@ -589,7 +605,8 @@ def calculate_fid(real_images, fake_images, device='cuda', batch_size=128, eps=1
     if np.iscomplexobj(covmean):
         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             m = np.max(np.abs(covmean.imag))
-            raise ValueError("Imaginary component {}".format(m))
+            print(f"Warning: FID imaginary component too large ({m:.6f}), returning nan.")
+            return float('nan')
         covmean = covmean.real
     covmean = np.trace(covmean)
     # Calculate FID
@@ -655,7 +672,8 @@ def fid_from_features(real_features, fake_features, eps=1e-6):
     if np.iscomplexobj(covmean):
         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             m = np.max(np.abs(covmean.imag))
-            raise ValueError("Imaginary component {}".format(m))
+            print(f"Warning: FID imaginary component too large ({m:.6f}), returning nan.")
+            return float('nan')
         covmean = covmean.real
     covmean = np.trace(covmean)
     return float(ssdiff + np.trace(sigma1) + np.trace(sigma2) - 2.0 * covmean)

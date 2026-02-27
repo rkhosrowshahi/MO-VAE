@@ -1,2 +1,0 @@
-configs/celeba/gg_vq_vae_v1/upgrad/mse/config.yaml
-configs/celeba/gg_vq_vae_v1/jd_sum/mse/config.yaml

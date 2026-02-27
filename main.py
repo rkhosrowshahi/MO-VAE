@@ -27,7 +27,7 @@ from torchjd.aggregation import (
     Mean,
     Sum
 )
-from utils.jd import PNUPGrad, NUPGrad, AlignedMTL, MGDA, COMFORT
+from utils.torchmoo import PNUPGrad, NUPGrad, AlignedMTL, MGDA, COMFORT
 
 import wandb
 from pymoo.indicators.hv import HV
@@ -316,7 +316,7 @@ def evaluate(net, data_loader, device, args):
     return loss_meters
 
 
-def _compute_recon_metrics_from_tensors(real_t, recon_t, device, batch_size_metric=128, min_size_for_lpips=64):
+def _compute_recon_metrics_from_tensors(real_t, recon_t, device, batch_size_metric=128, min_size_for_lpips=32):
     """Compute rFID, PSNR, SSIM, LPIPS from already-collected real and recon tensors."""
     out = {'rfid': float('nan'), 'psnr': float('nan'), 'ssim': float('nan'), 'lpips': float('nan')}
     n = min(real_t.size(0), recon_t.size(0))
@@ -595,50 +595,42 @@ def generate_reconstructed_samples(
     originals = torch.cat(originals, dim=0)
     reconstructions = torch.cat(reconstructions, dim=0)
 
-    # Map both to [0, 1] for display (handles [0,1], [-1,1], or logits), then stack and grid without normalize.
-    # def to_vis(x: torch.Tensor) -> torch.Tensor:
-    #     x = x.clone().float()
-    #     if x.min() < -0.01 or x.max() > 1.01:
-    #         if x.min() >= -1.5 and x.max() <= 1.5:
-    #             x = (x + 1.0) * 0.5  # [-1, 1] -> [0, 1]
-    #         else:
-    #             x = torch.sigmoid(x)  # logits -> [0, 1]
-    #     return torch.clamp(x, 0.0, 1.0)
-
-    # originals_vis = to_vis(originals)
-    # recons_vis = to_vis(reconstructions)
-
-    # comparison = []
-    # for idx in range(num_samples):
-    #     comparison.append(originals_vis[idx])
-    #     comparison.append(recons_vis[idx])
-    # comparison_tensor = torch.stack(comparison)
-
     comparison_tensor = torch.cat([originals, reconstructions], dim=0)
     grid = make_grid(
         comparison_tensor,
-        nrow=int(np.sqrt(num_samples)) * 2,
+        nrow=num_samples,
         normalize=True,
+        pad_value=1,
     )
 
     # Convert tensor to numpy array (for both matplotlib and wandb, avoids Windows temp directory issues)
     grid_np = grid.cpu().numpy().transpose((1, 2, 0))
     grid_np = np.clip(grid_np, 0, 1)
 
+    h, w = grid_np.shape[:2]
+    pad = 40
+    padded = np.ones((h, w + pad, 3), dtype=grid_np.dtype)
+    padded[:, pad:, :] = grid_np
+
+    fig, ax = plt.subplots(figsize=(15, 5))
+    ax.imshow(padded)
+    ax.axis("off")
+    ax.text(pad - 5, h // 4, "Original", fontsize=11, fontweight="bold",
+            va="center", ha="right", rotation=90, color="black")
+    ax.text(pad - 5, 3 * h // 4, "Reconstructed", fontsize=11, fontweight="bold",
+            va="center", ha="right", rotation=90, color="black")
+    plt.tight_layout()
+
     if save_path is not None:
-        plt.figure(figsize=(15, 15))
-        plt.imshow(grid_np)
-        plt.axis("off")
-        plt.title(f"Reconstructed {split_name} Samples (Original | Reconstructed)")
-        plt.tight_layout()
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        plt.close()
 
     if log_to_wandb and epoch is not None:
         wandb.log(
-            {f"reconstructed_{split_name}_samples": wandb.Image(grid_np, caption=f"Epoch {epoch}")},
+            {f"reconstructed_{split_name}_samples": wandb.Image(fig, caption=f"Epoch {epoch}")},
             step=step,
         )
+
+    plt.close()
 
     return originals, reconstructions
 
@@ -689,7 +681,7 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     - Precision/Recall: Using InceptionV3 features
     - KID: Kernel Inception Distance
     
-    ImageNet-pretrained metrics are skipped for images smaller than 64x64.
+    ImageNet-pretrained metrics are skipped for images smaller than 32x32.
     
     Args:
         net: The neural network model (must have a sample() method)
@@ -724,7 +716,11 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             batch_size_actual = min(batch_size, num_samples - len(generated_samples))
             if batch_size_actual <= 0:
                 break
-            samples = net.sample(num_samples=batch_size_actual, device=device)
+            try:
+                samples = net.sample(num_samples=batch_size_actual, device=device)
+            except Exception as e:
+                tqdm.write(f"Warning: net.sample() raised an exception for batch {i}: {e}. Skipping...")
+                continue
             # Check if samples are valid
             if samples is None or samples.numel() == 0:
                 tqdm.write(f"Warning: net.sample() returned empty tensor for batch {i}, skipping...")
@@ -795,9 +791,9 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     
     # Check image size - ImageNet-pretrained models may not work well with very small images
     # Note: CelebA-HQ and ImageNet are typically 256x256, which works fine with ImageNet metrics
-    # Regular CelebA is often 64x64, which requires skipping ImageNet-pretrained metrics
+    # Regular CelebA is often 64x64; 32x32 images (e.g. CIFAR) are also supported
     img_size = generated_images.size(-1)  # Assuming square images
-    min_size_for_imagenet_metrics = 64  # Minimum size for reliable ImageNet-pretrained metrics
+    min_size_for_imagenet_metrics = 32  # Minimum size for reliable ImageNet-pretrained metrics
     
     if img_size < min_size_for_imagenet_metrics:
         tqdm.write(f"Warning: Image size ({img_size}x{img_size}) is too small for ImageNet-pretrained metrics.")
@@ -973,8 +969,9 @@ def main(args):
             aggregator = PCGrad()
         elif agg_name == "mean":
             aggregator = Mean()
-        elif agg_name == "aligned_mtl":
+        elif agg_name in ["aligned_mtl", "aligned_mtl_min", "amtl", "amtl_min"]:
             aggregator = AlignedMTL()
+            args.aggregator = "aligned_mtl"
         elif agg_name == "aligned_mtl_median":
             aggregator = AlignedMTL(scale_mode="median")
         elif agg_name == "aligned_mtl_rmse":
@@ -1103,7 +1100,7 @@ def main(args):
 
         if (epoch % args.save_freq == 0) or epoch in {1, args.epochs}:
 
-            gen_path = os.path.join(save_root, "figures", "generated", f"epoch_{epoch:03d}_random_samples.pdf")
+            gen_path = os.path.join(save_root, "figures", "generated", f"epoch_{epoch:04d}_random_samples.pdf")
             generate_random_samples(
                 net,
                 num_samples=getattr(args, 'num_vis_samples', getattr(args, 'num_samples', 4)),
@@ -1114,7 +1111,7 @@ def main(args):
                 step=step,
             )
 
-            test_path = os.path.join(save_root, "figures", "reconstructed", f"epoch_{epoch:03d}_test_samples.pdf")
+            test_path = os.path.join(save_root, "figures", "reconstructed", f"epoch_{epoch:04d}_test_samples.pdf")
             generate_reconstructed_samples(
                 net,
                 "test",
@@ -1127,7 +1124,7 @@ def main(args):
                 step=step,
             )
 
-            train_path = os.path.join(save_root, "figures", "reconstructed", f"epoch_{epoch:03d}_train_samples.pdf")
+            train_path = os.path.join(save_root, "figures", "reconstructed", f"epoch_{epoch:04d}_train_samples.pdf")
             generate_reconstructed_samples(
                 net,
                 "train",

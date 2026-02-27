@@ -1,2 +1,0 @@
-configs/celeba/vq_vae/amtl/bce/config_1.yaml
-configs/celeba/vq_vae/amtl/config_seed999.yaml

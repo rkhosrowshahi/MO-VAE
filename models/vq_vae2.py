@@ -64,7 +64,7 @@ class VQVAE2(nn.Module):
                 recon_obj = bce_with_logits_per_image_sum
             else:
                  raise ValueError(f"BCE reduction {recons_reduction} not supported. Choose from: mean, sum")
-            output_activation = "none"
+            output_activation = "sigmoid"
         elif recons_dist == "laplacian":
             if recons_reduction == "mean":
                 recon_obj = laplacian_per_pixel_mean
@@ -261,8 +261,6 @@ class VQVAE2(nn.Module):
                 self.output_activation))
                 
         self.dec_bottom = nn.Sequential(*modules)
-
-        print(self.dec_bottom)
         
         # Calculate latent dimensions for sampling
         self.latent_spatial_dim_bottom = input_size // (2 ** len(hidden_dims))

@@ -401,13 +401,13 @@ def get_dataset(dataset_name, data_dir='./data', normalize=False):
         mean = (0.5, 0.5, 0.5)
         std = (0.5, 0.5, 0.5)
         train_transforms = [
-            transforms.CenterCrop(178),
+            # transforms.CenterCrop(178),
             transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ]
         test_transforms = [
-            transforms.CenterCrop(178),
+            # transforms.CenterCrop(178),
             transforms.Resize((input_size, input_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
             transforms.ToTensor(),
         ]

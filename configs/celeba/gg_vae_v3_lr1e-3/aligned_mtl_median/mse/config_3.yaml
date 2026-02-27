@@ -38,4 +38,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba gg_vae_v3 w_kl=1.573e-3 lr1e-3 wd1e-5 aligned_mtl_median seed12341234-mse
-wandb_group: celeba gg_vae_v3 w_kl=1.573e-3 lr1e-3 wd1e-5 aligned_mtl_median-mse
+wandb_group: celeba gg_vae_v3 w_kl=1.573e-3 lr1e-3 wd1e-mse-5 aligned_mtl_median

@@ -33,5 +33,5 @@ hv_ref:
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: animal_face-vq_vae-512k-64d-sum-seed123123123-mse
-wandb_group: animal_face-vq_vae-512k-64d-sum-mse
+wandb_name: animal_face-vq_vae-512k-64d-mse-sum-seed123123123
+wandb_group: animal_face-vq_vae-512k-64d-mse-sum

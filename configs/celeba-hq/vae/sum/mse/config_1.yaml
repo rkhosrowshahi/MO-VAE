@@ -35,5 +35,5 @@ hv_ref:
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba_hq-vae-4096d-1.0e-4*kld-sum-seed42-mse
-wandb_group: celeba_hq-vae-4096d-1.0e-4*kld-sum-mse
+wandb_name: celeba_hq-vae-4096d-1.0e-4*kld-mse-sum-seed42
+wandb_group: celeba_hq-vae-4096d-1.0e-4*kld-mse-sum

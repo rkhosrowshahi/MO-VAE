@@ -35,5 +35,5 @@ hv_ref:
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: imagenet-vae-4096d-1.0e-4*kld-amtl-seed42
-wandb_group: imagenet-vae-4096d-1.0e-4*kld-amtl
+wandb_name: imagenet-vae-4096d-1.0e-4*kld-bce-amtl-seed42
+wandb_group: imagenet-vae-4096d-1.0e-4*kld-bce-amtl

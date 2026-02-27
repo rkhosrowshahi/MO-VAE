@@ -37,4 +37,4 @@ use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
 wandb_name: celeba recursive_kl_vae mgda_l2 ann25k lr1e-3 wd1e-5 seed42-mse
-wandb_group: celeba recursive_kl_vae mgda_l2 ann25k lr1e-3 wd1e-5-mse
+wandb_group: celeba recursive_kl_vae mgda_l2 ann25k lr1e-3 wd1e-mse-5

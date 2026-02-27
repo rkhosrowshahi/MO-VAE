@@ -37,5 +37,5 @@ hv_ref:
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: oxford_flower_102-gg_vq_vae2-512k-64d-sum-seed123123123
-wandb_group: oxford_flower_102-gg_vq_vae2-512k-64d-sum
+wandb_name: oxford_flower_102-gg_vq_vae2-512k-64d-bce-sum-seed123123123
+wandb_group: oxford_flower_102-gg_vq_vae2-512k-64d-bce-sum

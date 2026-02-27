@@ -12,9 +12,14 @@ import yaml
 from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
 def load_yaml_config(config_path):
     """Load configuration from YAML file."""
     config_path = Path(config_path)
+    if not config_path.is_absolute():
+        config_path = PROJECT_ROOT / config_path
     if not config_path.exists():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
@@ -174,6 +179,8 @@ Examples:
     # Add files from --file-list
     if args.file_list:
         file_list_path = Path(args.file_list)
+        if not file_list_path.is_absolute():
+            file_list_path = PROJECT_ROOT / file_list_path
         if not file_list_path.exists():
             print(f"Error: File list not found: {file_list_path}", file=sys.stderr)
             sys.exit(1)

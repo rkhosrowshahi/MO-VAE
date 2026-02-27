@@ -123,8 +123,9 @@ Configs are stored under `configs/<dataset>/<arch>/<aggregator>/<recons_objectiv
 # Single config
 python runner.py --f configs/oxford-flower-102/vq_vae2/sum/bce/config_1.yaml
 
-# From file list
-python runner.py --file-list configs/oxford-flower-102/vq_vae2/configs.txt
+# From file list (bce or mse configs)
+python runner.py --file-list configs/oxford-flower-102/vq_vae2/bce_configs.txt
+python runner.py --file-list configs/oxford-flower-102/vq_vae2/mse_configs.txt
 ```
 
 ## Usage

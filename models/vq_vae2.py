@@ -9,7 +9,91 @@ from torchsummary import summary
 from utils.objectives import mse_per_image_sum, mse_per_pixel_mean, mse_total_batch_sum_scaled
 from utils.objectives import bce_with_logits_per_image_sum, bce_with_logits_per_pixel_mean
 from utils.objectives import laplacian_per_image_sum, laplacian_per_pixel_mean
-from models.vq_vae import VectorQuantizer, ResidualLayer
+from models.vq_vae import VectorQuantizer
+
+
+class ResBlock(nn.Module):
+    def __init__(self, in_channel, channel):
+        super().__init__()
+
+        self.conv = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv2d(in_channel, channel, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel, in_channel, 1),
+        )
+
+    def forward(self, input):
+        out = self.conv(input)
+        out += input
+
+        return out
+
+
+class Encoder(nn.Module):
+    def __init__(self, in_channel, channel, n_res_block, n_res_channel, stride):
+        super().__init__()
+
+        if stride == 4:
+            blocks = [
+                nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel // 2, channel, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel, channel, 3, padding=1),
+            ]
+
+        elif stride == 2:
+            blocks = [
+                nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel // 2, channel, 3, padding=1),
+            ]
+
+        for i in range(n_res_block):
+            blocks.append(ResBlock(channel, n_res_channel))
+
+        blocks.append(nn.ReLU(inplace=True))
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, input):
+        return self.blocks(input)
+
+
+class Decoder(nn.Module):
+    def __init__(
+        self, in_channel, out_channel, channel, n_res_block, n_res_channel, stride
+    ):
+        super().__init__()
+
+        blocks = [nn.Conv2d(in_channel, channel, 3, padding=1)]
+
+        for i in range(n_res_block):
+            blocks.append(ResBlock(channel, n_res_channel))
+
+        blocks.append(nn.ReLU(inplace=True))
+
+        if stride == 4:
+            blocks.extend(
+                [
+                    nn.ConvTranspose2d(channel, channel // 2, 4, stride=2, padding=1),
+                    nn.ReLU(inplace=True),
+                    nn.ConvTranspose2d(
+                        channel // 2, out_channel, 4, stride=2, padding=1
+                    ),
+                ]
+            )
+
+        elif stride == 2:
+            blocks.append(
+                nn.ConvTranspose2d(channel, out_channel, 4, stride=2, padding=1)
+            )
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, input):
+        return self.blocks(input)
 
 
 class VQVAE2(nn.Module):
@@ -129,229 +213,90 @@ class VQVAE2(nn.Module):
         else:
             raise ValueError(f"Output activation {output_activation} not supported")
 
-        # --- Encoder (Bottom Level) ---
-        # Downsamples input to bottom latent spatial dim
-        modules = []
-        enc_in_channels = in_channels
-        for h_dim in hidden_dims:
-            modules.append(
-                nn.Sequential(
-                    nn.Conv2d(enc_in_channels, out_channels=h_dim,
-                              kernel_size=4, stride=2, padding=1),
-                    nn.LeakyReLU())
-            )
-            enc_in_channels = h_dim
-
-        modules.append(
-            nn.Sequential(
-                nn.Conv2d(enc_in_channels, enc_in_channels,
-                          kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU())
+        self.enc_b = Encoder(in_channels, hidden_dims[0], num_residual_layers, 32, stride=4)
+        self.enc_t = Encoder(hidden_dims[0], hidden_dims[0], num_residual_layers, 32, stride=2)
+        self.quantize_conv_t = nn.Conv2d(hidden_dims[0], embedding_dim, 1)
+        self.quantize_t = VectorQuantizer(embedding_dim, num_embeddings)
+        self.dec_t = Decoder(
+            embedding_dim, embedding_dim, hidden_dims[0], num_residual_layers, 32, stride=2
         )
-
-        for _ in range(2): # Fewer res layers per level to keep params reasonable
-            modules.append(ResidualLayer(enc_in_channels, enc_in_channels))
-            
-        modules.append(nn.LeakyReLU())
-        
-        self.enc_bottom = nn.Sequential(*modules)
-        self.bottom_dim = enc_in_channels
-
-        # --- Encoder (Top Level) ---
-        # Downsamples bottom latent to top latent spatial dim
-        modules = []
-        modules.append(
-            nn.Sequential(
-                nn.Conv2d(self.bottom_dim, out_channels=self.bottom_dim,
-                          kernel_size=4, stride=2, padding=1),
-                nn.LeakyReLU())
+        self.quantize_conv_b = nn.Conv2d(embedding_dim + hidden_dims[0], embedding_dim, 1)
+        self.quantize_b = VectorQuantizer(embedding_dim, num_embeddings)
+        self.upsample_t = nn.ConvTranspose2d(
+            embedding_dim, embedding_dim, 4, stride=2, padding=1
         )
-        
-        modules.append(
-            nn.Sequential(
-                nn.Conv2d(self.bottom_dim, self.bottom_dim,
-                          kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU())
+        self.dec = Decoder(
+            embedding_dim + embedding_dim,
+            in_channels,
+            hidden_dims[0],
+            num_residual_layers,
+            32,
+            stride=4,
         )
-
-        for _ in range(num_residual_layers):
-            modules.append(ResidualLayer(self.bottom_dim, self.bottom_dim))
-            
-        modules.append(nn.LeakyReLU())
-        
-        # Project to embedding dim
-        modules.append(
-            nn.Sequential(
-                nn.Conv2d(self.bottom_dim, embedding_dim,
-                          kernel_size=1, stride=1),
-                nn.LeakyReLU())
-        )
-        
-        self.enc_top = nn.Sequential(*modules)
-
-        # --- Vector Quantizers ---
-        self.vq_bottom = VectorQuantizer(num_embeddings, embedding_dim)
-        self.vq_top = VectorQuantizer(num_embeddings, embedding_dim)
-        
-        # Projection for bottom before VQ
-        self.bottom_pre_vq = nn.Conv2d(self.bottom_dim, embedding_dim, kernel_size=1)
-
-        # --- Decoder (Top Level) ---
-        modules = []
-        modules.append(
-            nn.Sequential(
-                nn.Conv2d(embedding_dim, self.bottom_dim,
-                          kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU())
-        )
-        
-        for _ in range(num_residual_layers):
-            modules.append(ResidualLayer(self.bottom_dim, self.bottom_dim))
-            
-        modules.append(
-            nn.Sequential(
-                nn.ConvTranspose2d(self.bottom_dim, self.bottom_dim,
-                                   kernel_size=4, stride=2, padding=1),
-                nn.LeakyReLU())
-        )
-        
-        self.dec_top = nn.Sequential(*modules)
-
-        # --- Decoder (Bottom Level) ---
-        # Takes concatenated [dec_top_output, quantized_bottom]
-        modules = []
-        
-        # Input channels = bottom_dim (from top decoder) + embedding_dim (from bottom vq)
-        dec_in_channels = self.bottom_dim + embedding_dim
-        
-        modules.append(
-            nn.Sequential(
-                nn.Conv2d(dec_in_channels, self.bottom_dim,
-                          kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU())
-        )
-        
-        for _ in range(2):
-            modules.append(ResidualLayer(self.bottom_dim, self.bottom_dim))
-
-        # Upsample back to image size
-        decoder_hidden_dims = hidden_dims.copy()
-        decoder_hidden_dims.reverse()
-        
-        # First layer takes bottom_dim
-        curr_dim = self.bottom_dim
-        
-        for i in range(len(decoder_hidden_dims)):
-            out_dim = decoder_hidden_dims[i+1] if i < len(decoder_hidden_dims)-1 else decoder_hidden_dims[i]
-            
-            modules.append(
-                nn.Sequential(
-                    nn.ConvTranspose2d(curr_dim,
-                                       decoder_hidden_dims[i], # Output of ConvTranspose
-                                       kernel_size=4, stride=2, padding=1),
-                    nn.LeakyReLU())
-            )
-            curr_dim = decoder_hidden_dims[i]
-
-        # Final layer
-        modules.append(
-            nn.Sequential(
-                nn.Conv2d(curr_dim, out_channels=in_channels,
-                          kernel_size=3, padding=1),
-                self.output_activation))
-                
-        self.dec_bottom = nn.Sequential(*modules)
-
-        print("dec_top:")
-        print(self.dec_top)
-        print("dec_bottom:")
-        print(self.dec_bottom)
-        
         # Calculate latent dimensions for sampling
         self.latent_spatial_dim_bottom = input_size // (2 ** len(hidden_dims))
         self.latent_spatial_dim_top = self.latent_spatial_dim_bottom // 2
 
     def encode(self, input: Tensor) -> List[Tensor]:
         # Encode to bottom representation
-        enc_b = self.enc_bottom(input)
+        enc_b = self.enc_b(input)
         # Encode bottom representation to top representation
-        enc_t = self.enc_top(enc_b)
+        enc_t = self.enc_t(enc_b)
         
-        # Return raw latent codes (before quantization)
-        # Note: We need to project enc_b to embedding dimension if we want to return it as 'code'
-        # but forward() handles this differently. 
-        return [enc_t, enc_b]
+        quant_t = self.quantize_conv_t(enc_t)
+        quant_t, commitment_loss_t, embedding_loss_t, encoding_inds_top = self.quantize_t(quant_t)
+
+        dec_t = self.dec_t(quant_t)
+        enc_b = torch.cat([dec_t, enc_b], 1)
+
+        quant_b = self.quantize_conv_b(enc_b)
+        quant_b, commitment_loss_b, embedding_loss_b, encoding_inds_bottom = self.quantize_b(quant_b)
+
+        return enc_b, enc_t, quant_t, quant_b, commitment_loss_t, commitment_loss_b, embedding_loss_t, embedding_loss_b, encoding_inds_top, encoding_inds_bottom
 
     def decode(self, quant_t: Tensor, quant_b: Tensor) -> Tensor:
         # Decode top
-        dec_t = self.dec_top(quant_t)
+        dec_t = self.upsample_t(quant_t)
         # Concatenate with bottom quantization
         dec_input = torch.cat([dec_t, quant_b], dim=1)
         # Decode bottom
-        recons = self.dec_bottom(dec_input)
+        recons = self.dec(dec_input)
+        return recons
+
+    def decode_code(self, code_t, code_b):
+        quant_t = self.quantize_t.embed_code(code_t)
+        quant_t = quant_t.permute(0, 3, 1, 2)
+        quant_b = self.quantize_b.embed_code(code_b)
+        quant_b = quant_b.permute(0, 3, 1, 2)
+
+        recons = self.decode(quant_t, quant_b)
+
         return recons
 
     def forward(self, input: Tensor, **kwargs) -> Dict[str, Any]:
-        # 1. Encoder Bottom
-        enc_b = self.enc_bottom(input) # [B, bottom_dim, H/4, W/4]
-        
-        # 2. Encoder Top
-        enc_t = self.enc_top(enc_b)    # [B, embedding_dim, H/8, W/8]
-        
-        # 3. VQ Top
-        vq_top_output = self.vq_top(enc_t)
-        if len(vq_top_output) == 4:
-            quant_t, diff_t, id_t, encoding_inds_top = vq_top_output
-        else:
-            quant_t, diff_t, id_t = vq_top_output
-            encoding_inds_top = None
-        
-        # 4. Decode Top to get conditioning for bottom
-        dec_t = self.dec_top(quant_t) # [B, bottom_dim, H/4, W/4]
-        
-        # 5. Prepare Bottom for VQ
-        # We preserve residuals: features - decoded_top
-        # Or just quantize the bottom features directly. 
-        # Standard VQ-VAE-2 quantizes enc_b directly.
-        quant_b_input = self.bottom_pre_vq(enc_b) # [B, embedding_dim, H/4, W/4]
-        
-        # 6. VQ Bottom
-        vq_bottom_output = self.vq_bottom(quant_b_input)
-        if len(vq_bottom_output) == 4:
-            quant_b, diff_b, id_b, encoding_inds_bottom = vq_bottom_output
-        else:
-            quant_b, diff_b, id_b = vq_bottom_output
-            encoding_inds_bottom = None
-        
-        # 7. Decoder Bottom (with conditioning from Top)
-        # Concatenate along channel dimension
-        dec_input = torch.cat([dec_t, quant_b], dim=1)
-        recons = self.dec_bottom(dec_input)
+        enc_b, enc_t, quant_t, quant_b, commitment_loss_t, commitment_loss_b, embedding_loss_t, embedding_loss_b, encoding_inds_top, encoding_inds_bottom = self.encode(input)
+
+        recons = self.decode(quant_t, quant_b)
 
         # Sum losses
-        commitment_loss = diff_t + diff_b
-        embedding_loss = id_t + id_b # In existing implementation this variable holds embedding loss
-        
-        if isinstance(embedding_loss, tuple): # Handle if vq returns tuple vs tensor
-             # This part depends on exact return of VectorQuantizer.forward
-             # Based on models/vq_vae.py: returns (quantized, commitment_loss, embedding_loss)
-             pass
+        commitment_loss = commitment_loss_t + commitment_loss_b
+        embedding_loss = embedding_loss_t + embedding_loss_b # In existing implementation this variable holds embedding loss
 
         # Calculate codebook usage for both codebooks
         codebook_usage_percentage = 0.0
         if encoding_inds_top is not None and encoding_inds_bottom is not None:
             # Combine both codebooks for overall utilization
             # For VQVAE2, we typically report the average or combined utilization
-            usage_top = self.vq_top.get_codebook_usage_percentage_from_indices(encoding_inds_top)
-            usage_bottom = self.vq_bottom.get_codebook_usage_percentage_from_indices(encoding_inds_bottom)
+            usage_top = self.quantize_t.get_codebook_usage_percentage_from_indices(encoding_inds_top)
+            usage_bottom = self.quantize_b.get_codebook_usage_percentage_from_indices(encoding_inds_bottom)
             codebook_usage_percentage = (usage_top + usage_bottom) / 2.0
         
         outputs = {
             "recons": recons,
-            "quantized_top": quant_t,
-            "quantized_bottom": quant_b,
             "encoding_top": enc_t,
             "encoding_bottom": enc_b,
+            "quantized_top": quant_t,
+            "quantized_bottom": quant_b,
             "commitment_loss": commitment_loss,
             "embedding_loss": embedding_loss,
             "codebook_usage_percentage": codebook_usage_percentage,

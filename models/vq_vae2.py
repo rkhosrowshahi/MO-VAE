@@ -261,6 +261,11 @@ class VQVAE2(nn.Module):
                 self.output_activation))
                 
         self.dec_bottom = nn.Sequential(*modules)
+
+        print("dec_top:")
+        print(self.dec_top)
+        print("dec_bottom:")
+        print(self.dec_bottom)
         
         # Calculate latent dimensions for sampling
         self.latent_spatial_dim_bottom = input_size // (2 ** len(hidden_dims))

@@ -134,27 +134,27 @@ def get_network(input_size, num_channels=3, args=None, device=None):
     elif arch.lower() == 'vq_vae':
         # Default lambda_weights for VQVAE: [reconstruction, commitment, embedding]
         if lambda_weights is None:
-            lambda_weights = [1.0, 1.0, 1.0]
+            lambda_weights = [1.0, 1.0, 0.25]
         return VQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'gg_vq_vae_v1' or arch.lower() == 'gg_vq_vae':
         # Default lambda_weights for GGVQVAE: [reconstruction, gradient_guided, commitment, embedding]
         if lambda_weights is None:
-            lambda_weights = [1.0, 1.0, 1.0, 1.0]
+            lambda_weights = [1.0, 1.0, 0.25, 1.0]
         return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device, version="v1")
     elif arch.lower() == 'gg_vq_vae_v2':
         # Default lambda_weights for GGVQVAE: [reconstruction, gradient_guided, commitment, embedding]
         if lambda_weights is None:
-            lambda_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+            lambda_weights = [1.0, 1.0, 0.25, 1.0, 1.0]
         return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device, version="v2")
     elif arch.lower() == 'gg_vq_vae_v3':
         # Default lambda_weights for GGVQVAE: [reconstruction, gradient_guided, commitment, embedding]
         if lambda_weights is None:
-            lambda_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+            lambda_weights = [1.0, 1.0, 0.25, 1.0, 1.0]
         return GGVQVAE(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device, version="v3")
     elif arch.lower() == 'vq_vae2':
         # Default lambda_weights for VQVAE2: [reconstruction, commitment, embedding]
         if lambda_weights is None:
-            lambda_weights = [1.0, 1.0, 1.0]
+            lambda_weights = [1.0, 1.0, 0.25]
         return VQVAE2(embedding_dim=embedding_dim, num_embeddings=num_embeddings, hidden_dims=hidden_dims, num_residual_layers=num_residual_layers, input_size=input_size, in_channels=num_channels, recons_dist=recons_dist, recons_reduction=recons_reduction, lambda_weights=lambda_weights, device=device)
     elif arch.lower() == 'betatc_vae' or arch.lower() == 'btc_vae':
         # Default lambda_weights for BetaTCVAE: [reconstruction, mi, tc, kld]

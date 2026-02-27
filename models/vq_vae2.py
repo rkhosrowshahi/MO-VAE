@@ -225,12 +225,12 @@ class VQVAE2(nn.Module):
         self.enc_b = Encoder(in_channels, hidden_dims[0], num_residual_layers, 32, stride=4)
         self.enc_t = Encoder(hidden_dims[0], hidden_dims[0], num_residual_layers, 32, stride=2)
         self.quantize_conv_t = nn.Conv2d(hidden_dims[0], embedding_dim, 1)
-        self.quantize_t = VectorQuantizer(embedding_dim, num_embeddings)
+        self.quantize_t = VectorQuantizer(num_embeddings, embedding_dim)
         self.dec_t = Decoder(
             embedding_dim, embedding_dim, hidden_dims[0], num_residual_layers, 32, stride=2
         )
         self.quantize_conv_b = nn.Conv2d(embedding_dim + hidden_dims[0], embedding_dim, 1)
-        self.quantize_b = VectorQuantizer(embedding_dim, num_embeddings)
+        self.quantize_b = VectorQuantizer(num_embeddings, embedding_dim)
         self.upsample_t = nn.ConvTranspose2d(
             embedding_dim, embedding_dim, 4, stride=2, padding=1
         )

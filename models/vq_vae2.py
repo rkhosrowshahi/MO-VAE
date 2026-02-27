@@ -257,9 +257,9 @@ class VQVAE2(nn.Module):
         quant_t, commitment_loss_t, embedding_loss_t, encoding_inds_top = self.quantize_t(quant_t)
 
         dec_t = self.dec_t(quant_t)
-        enc_b = torch.cat([dec_t, enc_b], 1)
+        dec_t_enc_b = torch.cat([dec_t, enc_b], 1)
 
-        quant_b = self.quantize_conv_b(enc_b)
+        quant_b = self.quantize_conv_b(dec_t_enc_b)
         quant_b, commitment_loss_b, embedding_loss_b, encoding_inds_bottom = self.quantize_b(quant_b)
 
         return enc_b, enc_t, quant_t, quant_b, commitment_loss_t, commitment_loss_b, embedding_loss_t, embedding_loss_b, encoding_inds_top, encoding_inds_bottom

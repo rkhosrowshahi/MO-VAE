@@ -345,6 +345,8 @@ class VQVAE2(nn.Module):
             "recons": recons,
             "quantized_top": quant_t,
             "quantized_bottom": quant_b,
+            "encoding_top": enc_t,
+            "encoding_bottom": enc_b,
             "commitment_loss": commitment_loss,
             "embedding_loss": embedding_loss,
             "codebook_usage_percentage": codebook_usage_percentage,

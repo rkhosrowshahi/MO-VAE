@@ -64,6 +64,9 @@ class VectorQuantizer(nn.Module):
         encoding_inds_flat = encoding_inds.squeeze(1)  # [BHW]
         return quantized_latents, commitment_loss, embedding_loss, encoding_inds_flat
     
+    def embed_code(self, code: Tensor) -> Tensor:
+        return self.embedding(code)
+    
     def get_used_embeddings(self, latents: Tensor) -> Tensor:
         """
         Get the set of embedding indices that are used for the given latents.

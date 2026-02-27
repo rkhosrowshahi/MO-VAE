@@ -63,7 +63,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(
-        self, in_channel, out_channel, channel, n_res_block, n_res_channel, stride
+        self, in_channel, out_channel, channel, n_res_block, n_res_channel, stride, output_activation="none"
     ):
         super().__init__()
 
@@ -89,6 +89,15 @@ class Decoder(nn.Module):
             blocks.append(
                 nn.ConvTranspose2d(channel, out_channel, 4, stride=2, padding=1)
             )
+
+        if output_activation == "tanh":
+            blocks.append(nn.Tanh())
+        elif output_activation == "sigmoid":
+            blocks.append(nn.Sigmoid())
+        elif output_activation == "none":
+            pass
+        else:
+            raise ValueError(f"Output activation {output_activation} not supported")
 
         self.blocks = nn.Sequential(*blocks)
 
@@ -232,10 +241,11 @@ class VQVAE2(nn.Module):
             num_residual_layers,
             32,
             stride=4,
+            output_activation=output_activation
         )
-        # Calculate latent dimensions for sampling
-        self.latent_spatial_dim_bottom = input_size // (2 ** len(hidden_dims))
-        self.latent_spatial_dim_top = self.latent_spatial_dim_bottom // 2
+        # Latent spatial dims from encoder strides: enc_b stride=4 (÷4), enc_t stride=2 (÷2)
+        self.latent_spatial_dim_bottom = input_size // 4   # enc_b
+        self.latent_spatial_dim_top = input_size // 8     # enc_b then enc_t
 
     def encode(self, input: Tensor) -> List[Tensor]:
         # Encode to bottom representation
@@ -332,91 +342,37 @@ class VQVAE2(nn.Module):
             "total_loss": total_loss,
         }
 
-    def get_code_indices(self, input: Tensor) -> Dict[str, Tensor]:
-        """
-        Extract discrete code indices from input.
-        Used for training PixelCNN prior.
-        
-        Args:
-            input: [B, C, H, W] input images
-        
-        Returns:
-            Dictionary with 'indices_top' [B, H_t, W_t] and 'indices_bottom' [B, H_b, W_b]
-        """
-        self.eval()
-        with torch.no_grad():
-            # Encode
-            enc_b = self.enc_bottom(input)
-            enc_t = self.enc_top(enc_b)
-            
-            # Get top indices
-            enc_t_perm = enc_t.permute(0, 2, 3, 1).contiguous()
-            flat_enc_t = enc_t_perm.view(-1, self.embedding_dim)
-            
-            # Compute distances to top codebook
-            dist_t = torch.sum(flat_enc_t ** 2, dim=1, keepdim=True) + \
-                     torch.sum(self.vq_top.embedding.weight ** 2, dim=1) - \
-                     2 * torch.matmul(flat_enc_t, self.vq_top.embedding.weight.t())
-            indices_t = torch.argmin(dist_t, dim=1)
-            
-            # Reshape to spatial dimensions
-            B = input.size(0)
-            indices_t = indices_t.view(B, self.latent_spatial_dim_top, self.latent_spatial_dim_top)
-            
-            # Get bottom indices
-            quant_b_input = self.bottom_pre_vq(enc_b)
-            quant_b_input_perm = quant_b_input.permute(0, 2, 3, 1).contiguous()
-            flat_enc_b = quant_b_input_perm.view(-1, self.embedding_dim)
-            
-            # Compute distances to bottom codebook
-            dist_b = torch.sum(flat_enc_b ** 2, dim=1, keepdim=True) + \
-                     torch.sum(self.vq_bottom.embedding.weight ** 2, dim=1) - \
-                     2 * torch.matmul(flat_enc_b, self.vq_bottom.embedding.weight.t())
-            indices_b = torch.argmin(dist_b, dim=1)
-            
-            # Reshape to spatial dimensions
-            indices_b = indices_b.view(B, self.latent_spatial_dim_bottom, self.latent_spatial_dim_bottom)
-            
-        return {
-            'indices_top': indices_t,
-            'indices_bottom': indices_b
-        }
-
     def sample(self, num_samples=1, device=None):
         """
         Sample uniformly from codebooks (random noise generation).
         Requires a prior (e.g. PixelCNN) for meaningful generation.
-        
+
         For proper sampling with learned prior, use:
             from models.pixelcnn_prior import HierarchicalPixelCNN
             prior = HierarchicalPixelCNN(...)
             samples = prior.sample_with_vqvae2(vqvae2_model, batch_size, device)
         """
+        if device is None:
+            device = next(self.parameters()).device
         self.eval()
         with torch.no_grad():
-            # Random top indices
-            rand_ind_t = torch.randint(
-                0, self.num_embeddings,
-                (num_samples, self.latent_spatial_dim_top * self.latent_spatial_dim_top),
-                device=device
+            # Random top indices [B, H_t, W_t]
+            code_t = torch.randint(
+                0,
+                self.num_embeddings,
+                (num_samples, self.latent_spatial_dim_top, self.latent_spatial_dim_top),
+                device=device,
+                dtype=torch.long,
             )
-            quant_t = self.vq_top.embedding(rand_ind_t)
-            quant_t = quant_t.view(num_samples, self.latent_spatial_dim_top, 
-                                   self.latent_spatial_dim_top, self.embedding_dim)
-            quant_t = quant_t.permute(0, 3, 1, 2).contiguous()
-            
-            # Random bottom indices
-            rand_ind_b = torch.randint(
-                0, self.num_embeddings,
-                (num_samples, self.latent_spatial_dim_bottom * self.latent_spatial_dim_bottom),
-                device=device
+            # Random bottom indices [B, H_b, W_b]
+            code_b = torch.randint(
+                0,
+                self.num_embeddings,
+                (num_samples, self.latent_spatial_dim_bottom, self.latent_spatial_dim_bottom),
+                device=device,
+                dtype=torch.long,
             )
-            quant_b = self.vq_bottom.embedding(rand_ind_b)
-            quant_b = quant_b.view(num_samples, self.latent_spatial_dim_bottom,
-                                   self.latent_spatial_dim_bottom, self.embedding_dim)
-            quant_b = quant_b.permute(0, 3, 1, 2).contiguous()
-            
-            generated_samples = self.decode(quant_t, quant_b)
+            generated_samples = self.decode_code(code_t, code_b)
             
         return generated_samples
 

@@ -70,8 +70,23 @@ class GGVQVAE(VQVAE):
         elif version == "v3":
             self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
             self.objectives["edge_matching_loss"] = self.edge_matching_loss_v2
+        elif version == "v4":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+            self.objectives["edge_matching_loss"] = self.edge_matching_loss_v3
+        elif version == "v5":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+            self.objectives["edge_matching_loss"] = self.edge_matching_loss_v4
+        elif version == "v6":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+            self.objectives["edge_matching_loss"] = self.edge_matching_loss_v5
+        elif version == "v7":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+            self.objectives["edge_matching_loss"] = self.edge_matching_loss_v6
+        elif version == "v8":
+            self.objectives["gradient_guided_loss"] = self.gradient_guided_loss
+            self.objectives["edge_matching_loss"] = self.edge_matching_loss_v7
         else:
-            raise ValueError(f"Version {version} not supported. Choose from: v1, v2, v3")
+            raise ValueError(f"Version {version} not supported. Choose from: v1, v2, v3, v4, v5, v6, v7, v8")
 
         # lambda_weights: dictionary matching self.objectives keys
         # Accepts either dict or list (for backward compatibility)
@@ -79,9 +94,7 @@ class GGVQVAE(VQVAE):
             # Default weights based on version
             if version == "v1":
                 lambda_weights = {"reconstruction_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "gradient_guided_loss": 1.0}
-            elif version == "v2":
-                lambda_weights = {"reconstruction_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
-            elif version == "v3":
+            elif version in ["v2", "v3", "v4", "v5", "v6", "v7", "v8"]:
                 lambda_weights = {"reconstruction_loss": 1.0, "embedding_loss": 1.0, "commitment_loss": 0.25, "gradient_guided_loss": 1.0, "edge_matching_loss": 1.0}
         elif isinstance(lambda_weights, list):
             # Convert list to dict based on version
@@ -94,7 +107,7 @@ class GGVQVAE(VQVAE):
                     "commitment_loss": lambda_weights[2],
                     "gradient_guided_loss": lambda_weights[3]
                 }
-            elif version == "v2":
+            elif version in ["v2", "v3", "v4", "v5", "v6", "v7", "v8"]:
                 if len(lambda_weights) != 5:
                     raise ValueError(f"GGVQVAE v2 requires 5 lambda_weights (reconstruction, embedding, commitment, gradient_guided, edge_matching), got {len(lambda_weights)}")
                 lambda_weights = {
@@ -104,31 +117,6 @@ class GGVQVAE(VQVAE):
                     "gradient_guided_loss": lambda_weights[3],
                     "edge_matching_loss": lambda_weights[4]
                 }
-            elif version == "v3":
-                if len(lambda_weights) != 5:
-                    raise ValueError(f"GGVQVAE v3 requires 5 lambda_weights (reconstruction, embedding, commitment, gradient_guided, edge_matching), got {len(lambda_weights)}")
-                lambda_weights = {
-                    "reconstruction_loss": lambda_weights[0],
-                    "embedding_loss": lambda_weights[1],
-                    "commitment_loss": lambda_weights[2],
-                    "gradient_guided_loss": lambda_weights[3],
-                    "edge_matching_loss": lambda_weights[4]
-                }
-        elif isinstance(lambda_weights, dict):
-            # Validate dict keys match objectives
-            expected_keys = set(self.objectives.keys())
-            provided_keys = set(lambda_weights.keys())
-            if expected_keys != provided_keys:
-                missing = expected_keys - provided_keys
-                extra = provided_keys - expected_keys
-                error_msg = f"lambda_weights keys must match objectives keys. "
-                if missing:
-                    error_msg += f"Missing: {missing}. "
-                if extra:
-                    error_msg += f"Extra: {extra}."
-                raise ValueError(error_msg)
-        else:
-            raise TypeError(f"lambda_weights must be dict or list, got {type(lambda_weights)}")
         
         # Override lambda_weights from parent
         self.lambda_weights = lambda_weights
@@ -198,6 +186,87 @@ class GGVQVAE(VQVAE):
         grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
         grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
 
-        edge_match_loss = F.l1_loss(grad_pred, grad_target)
+        edge_match_loss = F.smooth_l1_loss(grad_pred, grad_target)
+        
+        return edge_match_loss
+    
+    def edge_matching_loss_v3(self, inputs, recons):
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
+        
+        # Normalize to handle scale differences from sigmoid
+        grad_target_norm = grad_target / (grad_target.max() + EPS)
+        grad_pred_norm = grad_pred / (grad_pred.max() + EPS)
+        
+        edge_match_loss = F.smooth_l1_loss(grad_pred_norm, grad_target_norm)
+        return edge_match_loss
+
+
+    def edge_matching_loss_v4(self, inputs, recons):
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Use Gradient Direction Instead of Magnitude
+        # Compute edge directions (angles)
+        grad_target_angle = torch.atan2(input_y, input_x)
+        grad_pred_angle = torch.atan2(recon_y, recon_x)
+
+        edge_match_loss = F.smooth_l1_loss(grad_pred_angle, grad_target_angle)
+        return edge_match_loss
+
+    def edge_matching_loss_v5(self, inputs, recons):
+        # Compute gradients
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        # Compute gradient magnitudes
+        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
+        grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
+        # Only penalize where edges are actually significant
+        edge_threshold = grad_target.mean()
+        mask = (grad_target > edge_threshold).float()
+        edge_match_loss = F.smooth_l1_loss(grad_pred * mask, grad_target * mask)
+        return edge_match_loss
+
+    def edge_matching_loss_v6(self, inputs, recons):
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        grad_target = torch.stack([input_x, input_y], dim=1)  # (B, 2, H, W)
+        grad_pred = torch.stack([recon_x, recon_y], dim=1)
+        
+        # Normalize to unit vectors
+        grad_target = F.normalize(grad_target, p=2, dim=1)
+        grad_pred = F.normalize(grad_pred, p=2, dim=1)
+        
+        # Cosine similarity: measures *direction* not magnitude
+        edge_match_loss = 1 - F.cosine_similarity(grad_pred, grad_target).mean()
+        
+        return edge_match_loss
+
+    def edge_matching_loss_v7(self, inputs, recons):
+        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
+        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
+        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
+        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
+        
+        # Threshold to get edge maps (binary)
+        target_edges = (torch.sqrt(input_x**2 + input_y**2 + EPS) > 0.5).float()
+        pred_edges = (torch.sqrt(recon_x**2 + recon_y**2 + EPS) > 0.5).float()
+        
+        # BCE on edge presence, not magnitude
+        edge_match_loss = F.binary_cross_entropy(pred_edges, target_edges)
         
         return edge_match_loss

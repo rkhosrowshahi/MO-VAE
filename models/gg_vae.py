@@ -60,7 +60,7 @@ class GGVAE(VAE):
             3: self.edge_matching_loss_v3,
             4: self.edge_matching_loss_v4,
             5: self.edge_matching_loss_v5,
-            6: self.edge_matching_loss_v6s,
+            6: self.edge_matching_loss_v6,
         }.get(edge_matching_version, self.edge_matching_loss)
         self.objectives = {"reconstruction_loss": self.recon_obj, "kld_loss": self.kld_obj,
                           "gradient_guided_loss": self.edge_weighted_pixel_loss,
@@ -222,7 +222,7 @@ class GGVAE(VAE):
         
         return edge_match_loss
 
-    def edge_matching_loss_v6s(self, inputs, recons):
+    def edge_matching_loss_v6(self, inputs, recons):
         input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
         input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
         recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))

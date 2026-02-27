@@ -1,9 +1,0 @@
-configs/celeba/vae_10epochs/upgrad/bce/config_1.yaml
-configs/celeba/vae_10epochs/aligned_mtl/bce/config_1.yaml
-configs/celeba/vae_10epochs/sum/bce/config_1.yaml
-configs/celeba/vae_10epochs/upgrad/bce/config_2.yaml
-configs/celeba/vae_10epochs/aligned_mtl/bce/config_2.yaml
-configs/celeba/vae_10epochs/sum/bce/config_2.yaml
-configs/celeba/vae_10epochs/upgrad/bce/config_3.yaml
-configs/celeba/vae_10epochs/aligned_mtl/bce/config_3.yaml
-configs/celeba/vae_10epochs/sum/bce/config_3.yaml

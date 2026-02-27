@@ -1,0 +1,41 @@
+dataset: cifar100
+data_dir: ../data
+normalize_inputs: false
+arch: gg_vq_vae_v8
+embedding_dim: 64
+num_embeddings: 512
+hidden_dims:
+- 128
+- 256
+loss_weights:
+  reconstruction_loss: 1.0
+  embedding_loss: 1.0
+  commitment_loss: 0.25
+  gradient_guided_loss: 1.0
+  edge_matching_loss: 1.0
+recons_objective: bce
+recons_activation: sigmoid
+hv_ref:
+  reconstruction_loss: 1.1
+  gradient_guided_loss: 1.1
+  embedding_loss: 1.1
+  commitment_loss: 1.1
+  edge_matching_loss: 1.1
+epochs: 200
+batch_size: 256
+optimizer: adam
+lr: 1e-3
+scheduler: cosine
+scheduler_lr_min: 1e-6
+wd: 0.0
+aggregator: mgda
+seed: 42
+save_path: logs/
+save_freq: 20
+eval_freq: 20
+num_vis_samples: 9
+use_wandb: true
+wandb_project: mo-vae
+wandb_entity: rasa_research
+wandb_name: cifar100-gg_vq_vae_v8-512k-64d-bce-mgda-seed42
+wandb_group: cifar100-gg_vq_vae_v8-512k-64d-bce-mgda

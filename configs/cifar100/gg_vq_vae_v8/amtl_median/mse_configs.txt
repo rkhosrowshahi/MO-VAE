@@ -1,0 +1,3 @@
+configs\cifar100\gg_vq_vae_v8\amtl_median\mse\config_1.yaml
+configs\cifar100\gg_vq_vae_v8\amtl_median\mse\config_2.yaml
+configs\cifar100\gg_vq_vae_v8\amtl_median\mse\config_3.yaml

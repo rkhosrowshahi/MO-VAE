@@ -1,3 +1,0 @@
-configs\celeba\gg_vq_vae_v2\upgrad\bce\config_1.yaml
-configs/celeba/gg_vq_vae_v2/upgrad/bce/bce_2.yaml
-configs/celeba/gg_vq_vae_v2/upgrad/bce/bce_3.yaml

@@ -174,6 +174,10 @@ class VAE(nn.Module):
         
         self.decoder = nn.Sequential(*modules)
 
+        print(f"Encoder: {self.encoder}")
+        print(f"Decoder: {self.decoder}")
+        print(f"Final layer: {self.final_layer}")
+
     def encode(self, x):
         # Encode the input image
         h = self.encoder(x)

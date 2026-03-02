@@ -38,8 +38,11 @@ normalize_inputs: {str(norm).lower()}
 arch: {arch}
 latent_dim: 128
 hidden_dims:
+- 32
+- 64
 - 128
 - 256
+- 512
 loss_weights:
   reconstruction_loss: 1.0
   kld_loss: {KLD_WEIGHT}
@@ -78,8 +81,11 @@ normalize_inputs: {str(norm).lower()}
 arch: {arch}
 latent_dim: 128
 hidden_dims:
+- 32
+- 64
 - 128
 - 256
+- 512
 loss_weights:
   reconstruction_loss: 1.0
   kld_loss: {KLD_WEIGHT}

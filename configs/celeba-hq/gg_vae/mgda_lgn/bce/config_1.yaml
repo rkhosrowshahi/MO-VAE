@@ -2,19 +2,20 @@ dataset: celeba-hq
 data_dir: ../data
 normalize_inputs: false
 arch: vae
-latent_dim: 4096
+latent_dim: 512
 hidden_dims:
 - 32
 - 64
 - 128
 - 256
 - 512
+- 1024
 loss_weights:
   reconstruction_loss: 1.0
-  kld_loss: 0.0001
+  kld_loss: 0.004
 recons_objective: bce
 recons_activation: sigmoid
-epochs: 400
+epochs: 500
 batch_size: 128
 optimizer: adam
 lr: 1e-4

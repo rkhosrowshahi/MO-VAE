@@ -10,7 +10,6 @@ configs\cifar100\gg_vq_vae_v3\sum\mse\config_2.yaml
 configs\cifar100\gg_vq_vae_v3\mgda_ln\mse\config_2.yaml
 configs\cifar100\gg_vq_vae_v3\mgda_gn\mse\config_2.yaml
 configs\cifar100\gg_vq_vae_v3\mgda_lgn\mse\config_2.yaml
-configs\cifar100\gg_vq_vae_v3\mgda\mse\config_2.yaml
 configs\cifar100\gg_vq_vae_v3\upgrad\mse\config_2.yaml
 configs\cifar100\gg_vq_vae_v3\amtl_median\mse\config_2.yaml
 configs\cifar100\gg_vq_vae_v3\amtl_min\mse\config_2.yaml
@@ -18,7 +17,6 @@ configs\cifar100\gg_vq_vae_v3\sum\mse\config_3.yaml
 configs\cifar100\gg_vq_vae_v3\mgda_ln\mse\config_3.yaml
 configs\cifar100\gg_vq_vae_v3\mgda_gn\mse\config_3.yaml
 configs\cifar100\gg_vq_vae_v3\mgda_lgn\mse\config_3.yaml
-configs\cifar100\gg_vq_vae_v3\mgda\mse\config_3.yaml
 configs\cifar100\gg_vq_vae_v3\upgrad\mse\config_3.yaml
 configs\cifar100\gg_vq_vae_v3\amtl_median\mse\config_3.yaml
 configs\cifar100\gg_vq_vae_v3\amtl_min\mse\config_3.yaml

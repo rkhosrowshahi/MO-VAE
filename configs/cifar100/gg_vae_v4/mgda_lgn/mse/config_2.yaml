@@ -24,7 +24,7 @@ hv_ref:
 epochs: 200
 batch_size: 256
 optimizer: adam
-lr: 1e-3
+lr: 1e-4
 scheduler: cosine
 scheduler_lr_min: 1e-6
 wd: 0.0

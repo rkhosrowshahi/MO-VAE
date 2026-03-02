@@ -267,6 +267,6 @@ class GGVQVAE(VQVAE):
         pred_edges = (torch.sqrt(recon_x**2 + recon_y**2 + EPS) > 0.5).float()
         
         # BCE on edge presence, not magnitude
-        edge_match_loss = F.binary_cross_entropy(pred_edges, target_edges)
+        edge_match_loss = F.mse_loss(pred_edges, target_edges)
         
         return edge_match_loss

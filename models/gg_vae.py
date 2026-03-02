@@ -58,7 +58,6 @@ class GGVAE(VAE):
             1: self.edge_matching_loss,
             2: self.edge_matching_loss_v2,
             3: self.edge_matching_loss_v3,
-            4: self.edge_matching_loss_v4,
             5: self.edge_matching_loss_v5,
             6: self.edge_matching_loss_v6,
         }.get(edge_matching_version, self.edge_matching_loss)
@@ -189,21 +188,6 @@ class GGVAE(VAE):
         edge_match_loss = F.smooth_l1_loss(grad_pred_angle, grad_target_angle)
         return edge_match_loss
 
-    def edge_matching_loss_v4(self, inputs, recons):
-        # Compute gradients
-        input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
-        input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
-        recon_x = F.conv2d(recons, self.sobel_x, padding=1, groups=inputs.size(1))
-        recon_y = F.conv2d(recons, self.sobel_y, padding=1, groups=inputs.size(1))
-        # Compute gradient magnitudes
-        grad_pred = torch.sqrt(recon_x**2 + recon_y**2 + EPS)
-        grad_target = torch.sqrt(input_x**2 + input_y**2 + EPS)
-        # Only penalize where edges are actually significant
-        edge_threshold = grad_target.mean()
-        mask = (grad_target > edge_threshold).float()
-        edge_match_loss = F.smooth_l1_loss(grad_pred * mask, grad_target * mask)
-        return edge_match_loss
-
     def edge_matching_loss_v5(self, inputs, recons):
         input_x = F.conv2d(inputs, self.sobel_x, padding=1, groups=inputs.size(1))
         input_y = F.conv2d(inputs, self.sobel_y, padding=1, groups=inputs.size(1))
@@ -233,7 +217,7 @@ class GGVAE(VAE):
         pred_edges = (torch.sqrt(recon_x**2 + recon_y**2 + EPS) > 0.5).float()
         
         # BCE on edge presence, not magnitude
-        edge_match_loss = F.binary_cross_entropy(pred_edges, target_edges)
+        edge_match_loss = F.mse_losss(pred_edges, target_edges)
         
         return edge_match_loss
 

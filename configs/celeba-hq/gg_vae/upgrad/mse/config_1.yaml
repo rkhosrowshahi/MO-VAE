@@ -1,7 +1,7 @@
 dataset: celeba-hq
 data_dir: ../data
 normalize_inputs: true
-arch: vae
+arch: gg_vae
 latent_dim: 512
 hidden_dims:
 - 32
@@ -13,6 +13,8 @@ hidden_dims:
 loss_weights:
   reconstruction_loss: 1.0
   kld_loss: 0.004
+  gradient_guided_loss: 1.0
+  edge_matching_loss: 1.0
 recons_objective: mse
 recons_activation: none
 epochs: 500
@@ -33,8 +35,10 @@ num_vis_samples: 4
 hv_ref:
   reconstruction_loss: 1.1
   kld_loss: 1.1
+  gradient_guided_loss: 1.1
+  edge_matching_loss: 1.1
 use_wandb: true
 wandb_project: mo-vae
 wandb_entity: rasa_research
-wandb_name: celeba_hq-vae-512d-4e-3*kld-mse-upgrad-seed42
-wandb_group: celeba_hq-vae-512d-4e-3*kld-mse-upgrad
+wandb_name: celeba_hq-gg_vae-512d-4e-3*kld-mse-upgrad-seed42
+wandb_group: celeba_hq-gg_vae-512d-4e-3*kld-mse-upgrad

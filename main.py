@@ -1185,8 +1185,8 @@ def main(args):
             if scheduler is not None:
                 checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
             
-            torch.save(checkpoint_data, best_ckpt)
-            tqdm.write(f" *** Best model saved at epoch {epoch} with eval loss: {best_eval_loss:.6e} ***")
+            # torch.save(checkpoint_data, best_ckpt)
+            # tqdm.write(f" *** Best model saved at epoch {epoch} with eval loss: {best_eval_loss:.6e} ***")
 
     tqdm.write("Training completed!")
     
@@ -1195,7 +1195,6 @@ def main(args):
     checkpoint_data = {
         'epoch': args.epochs,
         'model_state_dict': net.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
         'args': vars(args),
         'train_losses': {key: meter.avg for key, meter in train_loss_meters.items()},
         'eval_losses': {key: meter.avg for key, meter in eval_loss_meters.items()},
@@ -1208,7 +1207,7 @@ def main(args):
     
     torch.save(checkpoint_data, final_ckpt)
     tqdm.write(f"Final checkpoint (last epoch) saved to: {final_ckpt}")
-    tqdm.write(f"Best checkpoint (eval loss: {best_eval_loss:.6e}) saved to: {os.path.join(save_root, 'checkpoints', 'best_checkpoint.pth')}")
+    # tqdm.write(f"Best checkpoint (eval loss: {best_eval_loss:.6e}) saved to: {os.path.join(save_root, 'checkpoints', 'best_checkpoint.pth')}")
 
     # Evaluate reconstruction metrics (rFID, PSNR, SSIM, LPIPS) and generative metrics (gFID, IS, Precision, Recall, KID)
     loss_meters, recon_metrics = evaluate_with_recon_metrics(net, test_loader, device, args)

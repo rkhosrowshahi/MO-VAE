@@ -1,4 +1,3 @@
-configs/celeba-hq/gg_vae/sum/mse/config_1.yaml
 configs/celeba-hq/gg_vae/mgda_ln/mse/config_1.yaml
 configs/celeba-hq/gg_vae/mgda_gn/mse/config_1.yaml
 configs/celeba-hq/gg_vae/mgda_lgn/mse/config_1.yaml

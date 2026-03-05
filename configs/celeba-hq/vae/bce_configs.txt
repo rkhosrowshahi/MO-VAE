@@ -1,6 +1,1 @@
-configs/celeba-hq/vae/mgda_ln/bce/config_1.yaml
-configs/celeba-hq/vae/mgda_gn/bce/config_1.yaml
-configs/celeba-hq/vae/mgda_lgn/bce/config_1.yaml
-configs/celeba-hq/vae/amtl_median/bce/config_1.yaml
-configs/celeba-hq/vae/amtl/bce/config_1.yaml
 configs/celeba-hq/vae/upgrad/bce/config_1.yaml

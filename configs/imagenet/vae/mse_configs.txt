@@ -1,7 +1,7 @@
-configs/imagenet/vae/sum/mse/config.yaml
-configs/imagenet/vae/mgda_ln/mse/config.yaml
-configs/imagenet/vae/mgda_gn/mse/config.yaml
-configs/imagenet/vae/mgda_lgn/mse/config.yaml
-configs/imagenet/vae/amtl_median/mse/config.yaml
-configs/imagenet/vae/amtl/mse/config.yaml
-configs/imagenet/vae/upgrad/mse/config.yaml
+configs/imagenet/vae/sum/mse/config_1.yaml
+configs/imagenet/vae/mgda_ln/mse/config_1.yaml
+configs/imagenet/vae/mgda_gn/mse/config_1.yaml
+configs/imagenet/vae/mgda_lgn/mse/config_1.yaml
+configs/imagenet/vae/amtl_median/mse/config_1.yaml
+configs/imagenet/vae/amtl/mse/config_1.yaml
+configs/imagenet/vae/upgrad/mse/config_1.yaml

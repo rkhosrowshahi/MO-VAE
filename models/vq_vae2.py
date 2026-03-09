@@ -196,6 +196,9 @@ class VQVAE2(nn.Module):
         )
         self.quantize_conv_b = nn.Conv2d(embedding_dim + hidden_dims[0], embedding_dim, 1)
         self.quantize_b = VectorQuantizer(num_embeddings, embedding_dim)
+        # Aliases for PixelCNN prior compatibility (sample_with_vqvae2 expects vq_top/vq_bottom)
+        self.vq_top = self.quantize_t
+        self.vq_bottom = self.quantize_b
         self.upsample_t = nn.ConvTranspose2d(
             embedding_dim, embedding_dim, 4, stride=2, padding=1
         )
@@ -283,6 +286,29 @@ class VQVAE2(nn.Module):
             return outputs["recons"]
             
         return outputs
+
+    def get_code_indices(self, input: Tensor) -> Dict[str, Tensor]:
+        """
+        Extract discrete code indices from input (top and bottom levels).
+        Used for training PixelCNN prior.
+        
+        Args:
+            input: [B, C, H, W] input images
+        
+        Returns:
+            Dict with 'indices_top': [B, H_t, W_t], 'indices_bottom': [B, H_b, W_b]
+        """
+        self.eval()
+        with torch.no_grad():
+            enc_b, enc_t, quant_t, quant_b, _, _, _, _, encoding_inds_top, encoding_inds_bottom = self.encode(input)
+            B = input.size(0)
+            indices_top = encoding_inds_top.view(
+                B, self.latent_spatial_dim_top, self.latent_spatial_dim_top
+            )
+            indices_bottom = encoding_inds_bottom.view(
+                B, self.latent_spatial_dim_bottom, self.latent_spatial_dim_bottom
+            )
+            return {'indices_top': indices_top, 'indices_bottom': indices_bottom}
 
     def loss_function(self, inputs, args: dict) -> dict:
         recons = args["recons"]

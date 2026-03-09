@@ -45,8 +45,24 @@ from utils.metrics import (
     # precision_recall_from_features,  # Commented out: computationally expensive
 )
 from models import get_network
+from models.pixelcnn_prior import PixelCNN, HierarchicalPixelCNN, PixelSNAIL, HierarchicalPixelSNAIL
+from utils.vq_codes_lmdb import get_or_extract_codes_lmdb
 
 plt.style.use(["science", "ieee", "no-latex"])
+
+# VQ-VAE architectures that require PixelCNN prior for meaningful generation
+ARCHS_NEEDING_PIXELCNN_PRIOR = {
+    "vq_vae", "gg_vq_vae", "gg_vq_vae_v1",
+    "gg_vq_vae_v2", "gg_vq_vae_v3", "gg_vq_vae_v4",
+    "gg_vq_vae_v5", "gg_vq_vae_v6", "gg_vq_vae_v7", "gg_vq_vae_v8",
+    "vq_vae2", "gg_vq_vae2",
+}
+
+
+def is_vq_model(args):
+    """Return True if the model architecture needs a PixelCNN prior for generation."""
+    arch = getattr(args, "arch", "vae")
+    return arch.lower() in ARCHS_NEEDING_PIXELCNN_PRIOR
 
 # Global step tracker for wandb logging in hooks
 _current_step = 0
@@ -492,12 +508,13 @@ def evaluate_recon_metrics(net, data_loader, device, args):
     return _compute_recon_metrics_from_tensors(real_t, recon_t, device)
 
 
-def generate_random_samples(net, num_samples, device, save_path=None, log_to_wandb=False, epoch=None, step=None):
+def generate_random_samples(net, num_samples, device, save_path=None, log_to_wandb=False, epoch=None, step=None, prior=None):
     """
     Generate random samples from the model's latent space.
     
     Samples random latent vectors and decodes them to generate new images.
-    Optionally saves the samples as a grid image and logs to wandb.
+    For VQ-VAE models, pass a trained PixelCNN prior to get meaningful samples;
+    otherwise uses naive random codebook sampling.
     
     Args:
         net: The neural network model (must have a sample() method)
@@ -507,11 +524,15 @@ def generate_random_samples(net, num_samples, device, save_path=None, log_to_wan
         log_to_wandb: Whether to log the samples to wandb
         epoch: Current epoch number (for logging)
         step: Current global step (for logging)
+        prior: Optional PixelCNN/HierarchicalPixelCNN prior for VQ models; if None, uses net.sample()
         
     Returns:
         torch.Tensor: Generated samples tensor of shape (num_samples, C, H, W)
     """
-    samples = net.sample(num_samples=num_samples, device=device)
+    if prior is not None:
+        samples = generate_samples_vq_with_prior(net, prior, num_samples, device, temperature=1.0)
+    else:
+        samples = net.sample(num_samples=num_samples, device=device)
     grid = make_grid(samples, nrow=int(np.sqrt(num_samples)), normalize=True)
 
     # Convert tensor to numpy array (for both matplotlib and wandb, avoids Windows temp directory issues)
@@ -671,9 +692,12 @@ def build_hv_indicator(objective_keys, args):
     return HV(ref_point=np.array(ref_point))
 
 
-def evaluate_generative_metrics(net, test_loader, device, args):
+def evaluate_generative_metrics(net, test_loader, device, args, prior=None):
     """
     Evaluate generative model metrics on generated samples: gFID, IS, Precision/Recall, KID.
+    
+    For VQ-VAE models, pass a trained PixelCNN prior for meaningful generation metrics;
+    otherwise uses naive random codebook sampling.
     
     Generates samples from the model and computes:
     - gFID: Fréchet Inception Distance (real vs generated)
@@ -717,7 +741,13 @@ def evaluate_generative_metrics(net, test_loader, device, args):
             if batch_size_actual <= 0:
                 break
             try:
-                samples = net.sample(num_samples=batch_size_actual, device=device)
+                if prior is not None:
+                    temp = getattr(args, "pixelcnn_temperature", 1.0)
+                    samples = generate_samples_vq_with_prior(
+                        net, prior, batch_size_actual, device, temperature=temp
+                    )
+                else:
+                    samples = net.sample(num_samples=batch_size_actual, device=device)
             except Exception as e:
                 tqdm.write(f"Warning: net.sample() raised an exception for batch {i}: {e}. Skipping...")
                 continue
@@ -855,6 +885,204 @@ def evaluate_generative_metrics(net, test_loader, device, args):
     )
     
     return metrics
+
+
+def train_pixelcnn_prior(net, train_loader, device, args, save_root):
+    """
+    Train a PixelCNN prior on the discrete codes of a VQ-VAE model.
+    Supports single-level (VQVAE, GGVQVAE) and hierarchical (VQVAE2, GGVQVAE2) models.
+    
+    Returns:
+        The trained prior model, or None on failure.
+    """
+    arch = getattr(args, "arch", "vae").lower()
+    is_hierarchical = arch in ("vq_vae2", "gg_vq_vae2")
+    
+    pixelcnn_epochs = getattr(args, "pixelcnn_epochs", 100)
+    pixelcnn_hidden_channels = getattr(args, "pixelcnn_hidden_channels", 128)
+    pixelcnn_num_layers = getattr(args, "pixelcnn_num_layers", 15)
+    pixelcnn_lr = getattr(args, "pixelcnn_lr", 3e-4)
+    pixelcnn_temperature = getattr(args, "pixelcnn_temperature", 1.0)
+    prior_type = getattr(args, "prior_type", "pixelcnn").lower()
+    use_pixelsnail = prior_type == "pixelsnail"
+    
+    net.eval()
+    for p in net.parameters():
+        p.requires_grad = False
+    
+    prior_dir = os.path.join(save_root, "pixelcnn_prior" if not use_pixelsnail else "pixelsnail_prior")
+    os.makedirs(os.path.join(prior_dir, "checkpoints"), exist_ok=True)
+    
+    if is_hierarchical:
+        if use_pixelsnail:
+            prior = HierarchicalPixelSNAIL(
+                num_embeddings=net.num_embeddings,
+                embedding_dim=net.embedding_dim,
+                hidden_channels=pixelcnn_hidden_channels,
+                num_blocks_top=getattr(args, "pixelsnail_num_blocks", 8),
+                num_res_blocks_per_layer=getattr(args, "pixelsnail_num_res_blocks", 2),
+                num_heads=getattr(args, "pixelsnail_num_heads", 8),
+                num_layers_bottom=pixelcnn_num_layers,
+                dropout=getattr(args, "pixelsnail_dropout", 0.1),
+            ).to(device)
+        else:
+            prior = HierarchicalPixelCNN(
+                num_embeddings=net.num_embeddings,
+                embedding_dim=net.embedding_dim,
+                hidden_channels=pixelcnn_hidden_channels,
+                num_layers=pixelcnn_num_layers,
+            ).to(device)
+    else:
+        if use_pixelsnail:
+            prior = PixelSNAIL(
+                num_embeddings=net.num_embeddings,
+                embedding_dim=net.embedding_dim,
+                hidden_channels=pixelcnn_hidden_channels,
+                num_blocks=getattr(args, "pixelsnail_num_blocks", 8),
+                num_res_blocks_per_layer=getattr(args, "pixelsnail_num_res_blocks", 2),
+                num_heads=getattr(args, "pixelsnail_num_heads", 8),
+                dropout=getattr(args, "pixelsnail_dropout", 0.1),
+            ).to(device)
+        else:
+            prior = PixelCNN(
+                num_embeddings=net.num_embeddings,
+                embedding_dim=net.embedding_dim,
+                hidden_channels=pixelcnn_hidden_channels,
+                num_layers=pixelcnn_num_layers,
+            ).to(device)
+    
+    prior_optimizer = optim.Adam(prior.parameters(), lr=pixelcnn_lr, weight_decay=0.0)
+    prior_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        prior_optimizer, T_max=pixelcnn_epochs, eta_min=1e-6
+    )
+
+    # Pre-extract codes to LMDB if enabled (avoids re-running VQ-VAE every epoch on ImageNet)
+    codes_dataset, use_lmdb = get_or_extract_codes_lmdb(
+        net, train_loader, device, save_root, is_hierarchical, args,
+        force_extract=getattr(args, "prior_force_extract_codes", False),
+        map_size=getattr(args, "prior_lmdb_map_size_gb", 150) * 1024**3,
+    )
+    if use_lmdb and codes_dataset is not None:
+        codes_loader = DataLoader(
+            codes_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            drop_last=False,
+            persistent_workers=True if args.num_workers > 0 else False,
+        )
+    else:
+        codes_loader = None
+
+    tqdm.write(f"Training {'PixelSNAIL' if use_pixelsnail else 'PixelCNN'} prior for {pixelcnn_epochs} epochs..."
+               + (" (using pre-extracted LMDB codes)" if use_lmdb else " (extracting codes on-the-fly)"))
+    best_loss = float("inf")
+
+    for epoch in tqdm(range(1, pixelcnn_epochs + 1), desc="PixelCNN prior"):
+        prior.train()
+        epoch_loss = 0.0
+        n_batches = 0
+
+        if use_lmdb and codes_loader is not None:
+            for batch in codes_loader:
+                prior_optimizer.zero_grad()
+                if is_hierarchical:
+                    z_top, z_bottom = batch
+                    z_top, z_bottom = z_top.to(device), z_bottom.to(device)
+                    loss_dict = prior.loss_function(z_top, z_bottom)
+                    loss = loss_dict["total_loss"]
+                else:
+                    z = batch if isinstance(batch, torch.Tensor) else batch[0]
+                    z = z.to(device)
+                    logits = prior(z)
+                    loss = torch.nn.functional.cross_entropy(
+                        logits.permute(0, 2, 3, 1).reshape(-1, net.num_embeddings),
+                        z.reshape(-1),
+                    )
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(prior.parameters(), 1.0)
+                prior_optimizer.step()
+                epoch_loss += loss.item()
+                n_batches += 1
+        else:
+            for images, _ in train_loader:
+                images = images.to(device)
+                prior_optimizer.zero_grad()
+                with torch.no_grad():
+                    if is_hierarchical:
+                        code_dict = net.get_code_indices(images)
+                        z_top = code_dict["indices_top"]
+                        z_bottom = code_dict["indices_bottom"]
+                    else:
+                        z = net.get_code_indices(images)
+                if is_hierarchical:
+                    loss_dict = prior.loss_function(z_top, z_bottom)
+                    loss = loss_dict["total_loss"]
+                else:
+                    logits = prior(z)
+                    loss = torch.nn.functional.cross_entropy(
+                        logits.permute(0, 2, 3, 1).reshape(-1, net.num_embeddings),
+                        z.reshape(-1),
+                    )
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(prior.parameters(), 1.0)
+                prior_optimizer.step()
+                epoch_loss += loss.item()
+                n_batches += 1
+
+        prior_scheduler.step()
+        avg_loss = epoch_loss / max(n_batches, 1)
+        
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            ckpt_path = os.path.join(prior_dir, "checkpoints", "best_prior.pth")
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": prior.state_dict(),
+                "loss": best_loss,
+            }, ckpt_path)
+    
+    final_ckpt = os.path.join(prior_dir, "checkpoints", "final_prior.pth")
+    torch.save({"model_state_dict": prior.state_dict(), "epoch": pixelcnn_epochs}, final_ckpt)
+    tqdm.write(f"{'PixelSNAIL' if use_pixelsnail else 'PixelCNN'} prior training complete. Best loss: {best_loss:.4f}. Saved to {prior_dir}")
+    
+    prior.eval()
+    return prior
+
+
+def generate_samples_vq_with_prior(net, prior, num_samples, device, temperature=1.0):
+    """
+    Generate samples from a VQ model using a trained PixelCNN prior.
+    Handles both single-level (VQVAE, GGVQVAE) and hierarchical (VQVAE2, GGVQVAE2) models.
+    """
+    net.eval()
+    prior.eval()
+    with torch.no_grad():
+        if hasattr(prior, 'sample_with_vqvae2'):
+            return prior.sample_with_vqvae2(
+                vqvae2_model=net,
+                batch_size=num_samples,
+                device=device,
+                temperature=temperature,
+            )
+        else:
+            z = prior.sample(
+                batch_size=num_samples,
+                height=net.latent_spatial_dim,
+                width=net.latent_spatial_dim,
+                device=device,
+                temperature=temperature,
+            )
+            z_flat = z.view(num_samples, -1)
+            quantized = net.vq_layer.embedding(z_flat)
+            quantized = quantized.view(
+                num_samples,
+                net.latent_spatial_dim,
+                net.latent_spatial_dim,
+                net.embedding_dim,
+            ).permute(0, 3, 1, 2).contiguous()
+            return net.decode(quantized)
 
 
 def main(args):
@@ -1209,9 +1437,25 @@ def main(args):
     tqdm.write(f"Final checkpoint (last epoch) saved to: {final_ckpt}")
     # tqdm.write(f"Best checkpoint (eval loss: {best_eval_loss:.6e}) saved to: {os.path.join(save_root, 'checkpoints', 'best_checkpoint.pth')}")
 
+    # For VQ-VAE and variants: train PixelCNN prior for meaningful generation and generative metrics
+    prior = None
+    if is_vq_model(args) and not getattr(args, "skip_pixelcnn", False):
+        prior = train_pixelcnn_prior(net, train_loader, device, args, save_root)
+        # Generate final random samples with the trained prior
+        gen_path = os.path.join(save_root, "figures", "generated", "final_random_samples_with_prior.pdf")
+        generate_random_samples(
+            net,
+            num_samples=getattr(args, "num_vis_samples", getattr(args, "num_samples", 16)),
+            device=device,
+            save_path=gen_path,
+            log_to_wandb=args.use_wandb,
+            epoch=args.epochs,
+            step=step,
+            prior=prior,
+        )
     # Evaluate reconstruction metrics (rFID, PSNR, SSIM, LPIPS) and generative metrics (gFID, IS, Precision, Recall, KID)
     loss_meters, recon_metrics = evaluate_with_recon_metrics(net, test_loader, device, args)
-    gen_metrics = evaluate_generative_metrics(net, test_loader, device, args)
+    gen_metrics = evaluate_generative_metrics(net, test_loader, device, args, prior=prior)
     
     if args.use_wandb:
         # Log final loss values
@@ -1377,6 +1621,27 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_tags", type=str, nargs="+", default=None)
     parser.add_argument("--max_fid_samples", type=int, default=10000, help="Maximum number of samples to use for FID computation")
     parser.add_argument("--max_gen_metrics_samples", type=int, default=10000, help="Maximum number of samples to use for IS, Precision, and Recall computation")
+    # PixelCNN/PixelSNAIL prior for VQ-VAE models (only used when arch is vq_vae, gg_vq_vae*, vq_vae2, gg_vq_vae2)
+    parser.add_argument("--prior_type", type=str, default="pixelcnn", choices=["pixelcnn", "pixelsnail"],
+                        help="Prior type: pixelcnn (default) or pixelsnail (adds self-attention for better long-range dependencies)")
+    parser.add_argument("--skip_pixelcnn", action="store_true", help="Skip prior training for VQ models (generative metrics will use naive random sampling)")
+    parser.add_argument("--pixelcnn_epochs", type=int, default=100, help="Number of epochs to train prior")
+    parser.add_argument("--pixelcnn_hidden_channels", type=int, default=128, help="Hidden channels in prior")
+    parser.add_argument("--pixelcnn_num_layers", type=int, default=15, help="Number of residual layers (PixelCNN) or bottom prior layers (PixelSNAIL)")
+    parser.add_argument("--pixelcnn_lr", type=float, default=3e-4, help="Learning rate for prior")
+    parser.add_argument("--pixelcnn_temperature", type=float, default=1.0, help="Sampling temperature for generation")
+    parser.add_argument("--pixelsnail_num_blocks", type=int, default=8, help="PixelSNAIL: number of attention blocks")
+    parser.add_argument("--pixelsnail_num_res_blocks", type=int, default=2, help="PixelSNAIL: residual blocks per layer")
+    parser.add_argument("--pixelsnail_num_heads", type=int, default=8, help="PixelSNAIL: attention heads")
+    parser.add_argument("--pixelsnail_dropout", type=float, default=0.1, help="PixelSNAIL: dropout rate")
+    parser.add_argument("--prior_use_lmdb_codes", action="store_true", default=True,
+                        help="Use pre-extracted LMDB codes for prior training (faster for ImageNet, default: True)")
+    parser.add_argument("--no_prior_lmdb_codes", action="store_false", dest="prior_use_lmdb_codes",
+                        help="Disable LMDB: extract codes on-the-fly each batch")
+    parser.add_argument("--prior_force_extract_codes", action="store_true",
+                        help="Force re-extraction of codes to LMDB even if cache exists")
+    parser.add_argument("--prior_lmdb_map_size_gb", type=float, default=150,
+                        help="LMDB map size in GB (for ImageNet use ~150)")
 
     args = parser.parse_args()
     # Parse loss_weights: JSON dict or list of floats

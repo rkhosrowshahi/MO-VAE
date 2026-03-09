@@ -10,7 +10,10 @@ from .gg_vq_vae import GGVQVAE
 from .vq_vae2 import VQVAE2
 from .gg_vq_vae2 import GGVQVAE2
 from .betatc_vae import BetaTCVAE
-from .pixelcnn_prior import PixelCNN, HierarchicalPixelCNN
+from .pixelcnn_prior import (
+    PixelCNN, HierarchicalPixelCNN,
+    PixelSNAIL, HierarchicalPixelSNAIL,
+)
 
 def get_network(input_size, num_channels=3, args=None, device=None):
     arch = getattr(args, "arch", "vae")

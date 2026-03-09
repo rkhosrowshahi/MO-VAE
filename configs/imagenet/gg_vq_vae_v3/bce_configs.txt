@@ -1,7 +1,7 @@
-configs/imagenet/gg_vq_vae_v3/sum/bce/config.yaml
-configs/imagenet/gg_vq_vae_v3/amtl_median/bce/config.yaml
-configs/imagenet/gg_vq_vae_v3/mgda_gn/bce/config.yaml
-configs/imagenet/gg_vq_vae_v3/mgda_lgn/bce/config.yaml
-configs/imagenet/gg_vq_vae_v3/mgda_ln/bce/config.yaml
-configs/imagenet/gg_vq_vae_v3/upgrad/bce/config.yaml
-configs/imagenet/gg_vq_vae_v3/amtl/bce/config.yaml
+configs/imagenet/gg_vq_vae_v3/sum/bce/config_1.yaml
+configs/imagenet/gg_vq_vae_v3/amtl_median/bce/config_1.yaml
+configs/imagenet/gg_vq_vae_v3/mgda_gn/bce/config_1.yaml
+configs/imagenet/gg_vq_vae_v3/mgda_lgn/bce/config_1.yaml
+configs/imagenet/gg_vq_vae_v3/mgda_ln/bce/config_1.yaml
+configs/imagenet/gg_vq_vae_v3/upgrad/bce/config_1.yaml
+configs/imagenet/gg_vq_vae_v3/amtl/bce/config_1.yaml

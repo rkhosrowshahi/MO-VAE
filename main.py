@@ -1192,18 +1192,18 @@ def main(args):
     if args.aggregator is not None:
         agg_name = args.aggregator.lower()
         if agg_name == "upgrad":
-            aggregator = UPGrad(norm_eps=args.agg_norm_eps, reg_eps=args.agg_reg_eps)
+            aggregator = UPGrad(norm_eps=args.agg_norm_eps, reg_eps=args.agg_reg_eps, pref_vector=args.pref_weights)
         elif agg_name == "pcgrad":
             aggregator = PCGrad()
         elif agg_name == "mean":
             aggregator = Mean()
         elif agg_name in ["aligned_mtl", "aligned_mtl_min", "amtl", "amtl_min"]:
-            aggregator = AlignedMTL()
+            aggregator = AlignedMTL(pref_vector=args.pref_weights)
             args.aggregator = "aligned_mtl"
         elif agg_name == "aligned_mtl_median":
-            aggregator = AlignedMTL(scale_mode="median")
+            aggregator = AlignedMTL(scale_mode="median", pref_vector=args.pref_weights)
         elif agg_name == "aligned_mtl_rmse":
-            aggregator = AlignedMTL(scale_mode="rmse")
+            aggregator = AlignedMTL(scale_mode="rmse", pref_vector=args.pref_weights)
         elif agg_name == "imtlg":
             aggregator = IMTLG()
         elif agg_name == 'mgda':
@@ -1580,6 +1580,13 @@ if __name__ == "__main__":
         nargs="*",
         default=None,
         help="Loss weights as dict (JSON string) or list of floats. E.g. '{\"reconstruction_loss\":1.0,\"commitment_loss\":1.0,\"embedding_loss\":0.25}' or '1.0 1.0 0.25'"
+    )
+    parser.add_argument(
+        "--pref_weights",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Preference weights as dict (JSON string) or list of floats. E.g. '{\"reconstruction_loss\":1.0,\"commitment_loss\":1.0,\"embedding_loss\":0.25}' or '1.0 1.0 0.25'"
     )
     parser.add_argument("--optimizer", type=str, default="adam")
     parser.add_argument("--momentum", type=float, default=0.9)
